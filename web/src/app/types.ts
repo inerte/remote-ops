@@ -27,6 +27,16 @@ export interface BoardSummary {
   readonly width: number
 }
 
+export interface ContractLobbySummary {
+  readonly contractId: string
+  readonly corporation: string
+  readonly label: string
+  readonly objective: string
+  readonly risk: string
+  readonly selected: boolean
+  readonly summary: string
+}
+
 export interface ControlSummary {
   readonly canAcknowledge: boolean
   readonly canAdvance: boolean
@@ -47,6 +57,14 @@ export interface DebriefSummary {
 export interface EventEntry {
   readonly message: string
   readonly turn: number
+}
+
+export interface MissionConfigOptionSummary {
+  readonly effects: readonly string[]
+  readonly id: string
+  readonly label: string
+  readonly selected: boolean
+  readonly summary: string
 }
 
 export interface MissionSummary {
@@ -80,6 +98,18 @@ export interface PacketSummary {
   readonly label: string
 }
 
+export type ShellStageId = 'config' | 'lobby' | 'mission'
+
+export interface ShellSummary {
+  readonly activeStage: ShellStageId
+  readonly configOptions: readonly MissionConfigOptionSummary[]
+  readonly contractOptions: readonly ContractLobbySummary[]
+  readonly selectedConfigId: string
+  readonly selectedContractId: string
+  readonly stageSummary: string
+  readonly stageTitle: string
+}
+
 export interface AppBootstrap {
   readonly autosave: string
   readonly board: BoardSummary
@@ -90,6 +120,7 @@ export interface AppBootstrap {
   readonly mission: MissionSummary
   readonly packets: readonly PacketSummary[]
   readonly robots: readonly RobotSummary[]
+  readonly shell: ShellSummary
   readonly tagline: string
   readonly title: string
 }

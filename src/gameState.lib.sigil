@@ -1,29 +1,4 @@
-λdefaultContracts()=>[µContractSummary]=[{
-  contractId:µContractId("helixgrid-battery-recovery"),
-  corporation:µCorporationId("helixgrid"),
-  label:"Recover the prototype cryocell battery",
-  objective:µStealPrototypeBattery()
-}]
-
-λdefaultInventory()=>[µInventoryItem]=[
-  {
-    label:"Battery pack",
-    partType:µBatteryPack(),
-    quantity:2
-  },
-  {
-    label:"Signal relay",
-    partType:µSignalRelay(),
-    quantity:1
-  },
-  {
-    label:"Spoofed service badge",
-    partType:µSpoofedServiceBadge(),
-    quantity:1
-  }
-]
-
-λdefaultRobots()=>[µRobotState]=[
+λbadgeSpoofRobots()=>[µRobotState]=[
   {
     archetype:µGeckoMicrocrawler(),
     battery:54,
@@ -98,7 +73,321 @@
   }
 ]
 
+λcampaignWithDefaultContracts(campaign:µCampaignState)=>µCampaignState={
+  availableContracts:defaultContracts(),
+  completedContracts:campaign.completedContracts,
+  heat:campaign.heat,
+  warehouse:campaign.warehouse
+}
+
+λcontractBaseSeed(contract:µContractSummary)=>Int match contract.contractId{
+  µContractId("helixgrid-battery-recovery")=>1337|
+  µContractId("morrow-audit-lift")=>1338|
+  µContractId("nightglass-dawn-snatch")=>1339|
+  _=>1337
+}
+
+λcontractOperationMessage(contract:µContractSummary)=>String match contract.contractId{
+  µContractId("helixgrid-battery-recovery")=>"Mission package assembled for HelixGrid battery recovery."|
+  µContractId("morrow-audit-lift")=>"Mission package assembled for Morrow Dynamics audit-lift."|
+  µContractId("nightglass-dawn-snatch")=>"Mission package assembled for Nightglass dawn-window snatch."|
+  _=>"Mission package assembled for the selected operation."
+}
+
+λdefaultContracts()=>[µContractSummary]=[
+  helixgridContract(),
+  morrowContract(),
+  nightglassContract()
+]
+
+λdefaultInventory()=>[µInventoryItem]=[
+  {
+    label:"Battery pack",
+    partType:µBatteryPack(),
+    quantity:2
+  },
+  {
+    label:"Signal relay",
+    partType:µSignalRelay(),
+    quantity:1
+  },
+  {
+    label:"Spoofed service badge",
+    partType:µSpoofedServiceBadge(),
+    quantity:1
+  }
+]
+
+λdefaultMissionConfig()=>µMissionConfigState={entryPlan:µEntryBadgeSpoof()}
+
+λdefaultOrders()=>[µRobotOrder]=[
+  queuedOrder(
+    µScan(),
+    µRobotId("gecko-1")
+  ),
+  queuedOrder(
+    µHold(),
+    µRobotId("mira-1")
+  ),
+  queuedOrder(
+    µMoveTo({
+      x:0,
+      y:5
+    }),
+    µRobotId("atlas-1")
+  ),
+  queuedOrder(
+    µReturnToRelay(),
+    µRobotId("wisp-1")
+  )
+]
+
+λdefaultRobots()=>[µRobotState]=badgeSpoofRobots()
+
+λdockBreachOrders()=>[µRobotOrder]=[
+  queuedOrder(
+    µMoveTo({
+      x:1,
+      y:5
+    }),
+    µRobotId("atlas-1")
+  ),
+  queuedOrder(
+    µFollow(µRobotId("atlas-1")),
+    µRobotId("mira-1")
+  ),
+  queuedOrder(
+    µHold(),
+    µRobotId("gecko-1")
+  ),
+  queuedOrder(
+    µReturnToRelay(),
+    µRobotId("wisp-1")
+  )
+]
+
+λdockBreachRobots()=>[µRobotState]=[
+  {
+    archetype:µGeckoMicrocrawler(),
+    battery:52,
+    damage:0,
+    id:µRobotId("gecko-1"),
+    locationLabel:"Duct checkpoint E2",
+    name:"Gecko",
+    parts:[
+      µFiberCamera(),
+      µBatteryPack()
+    ],
+    payload:0,
+    position:{
+      x:4,
+      y:1
+    },
+    signal:56
+  },
+  {
+    archetype:µMiraServiceAndroid(),
+    battery:77,
+    damage:0,
+    id:µRobotId("mira-1"),
+    locationLabel:"Lobby checkpoint B5",
+    name:"Mira",
+    parts:[
+      µSpoofedServiceBadge(),
+      µBasicHackingModule()
+    ],
+    payload:0,
+    position:{
+      x:1,
+      y:4
+    },
+    signal:82
+  },
+  {
+    archetype:µAtlasBreacher(),
+    battery:100,
+    damage:0,
+    id:µRobotId("atlas-1"),
+    locationLabel:"Dock stack B6",
+    name:"Atlas",
+    parts:[
+      µArmorPlate(),
+      µCargoClamp()
+    ],
+    payload:1,
+    position:{
+      x:1,
+      y:5
+    },
+    signal:90
+  },
+  {
+    archetype:µWispRelayDrone(),
+    battery:65,
+    damage:0,
+    id:µRobotId("wisp-1"),
+    locationLabel:"Outer relay A5",
+    name:"Wisp",
+    parts:[
+      µSignalRelay(),
+      µThermalDampener()
+    ],
+    payload:0,
+    position:{
+      x:0,
+      y:4
+    },
+    signal:76
+  }
+]
+
+λductInsertionOrders()=>[µRobotOrder]=[
+  queuedOrder(
+    µScan(),
+    µRobotId("gecko-1")
+  ),
+  queuedOrder(
+    µMoveTo({
+      x:6,
+      y:2
+    }),
+    µRobotId("mira-1")
+  ),
+  queuedOrder(
+    µHold(),
+    µRobotId("atlas-1")
+  ),
+  queuedOrder(
+    µReturnToRelay(),
+    µRobotId("wisp-1")
+  )
+]
+
+λductInsertionRobots()=>[µRobotState]=[
+  {
+    archetype:µGeckoMicrocrawler(),
+    battery:61,
+    damage:0,
+    id:µRobotId("gecko-1"),
+    locationLabel:"Maintenance duct F2",
+    name:"Gecko",
+    parts:[
+      µFiberCamera(),
+      µBatteryPack()
+    ],
+    payload:0,
+    position:{
+      x:5,
+      y:1
+    },
+    signal:64
+  },
+  {
+    archetype:µMiraServiceAndroid(),
+    battery:79,
+    damage:0,
+    id:µRobotId("mira-1"),
+    locationLabel:"Service corridor D4",
+    name:"Mira",
+    parts:[
+      µSpoofedServiceBadge(),
+      µBasicHackingModule()
+    ],
+    payload:0,
+    position:{
+      x:3,
+      y:3
+    },
+    signal:84
+  },
+  {
+    archetype:µAtlasBreacher(),
+    battery:96,
+    damage:0,
+    id:µRobotId("atlas-1"),
+    locationLabel:"Loading dock A6",
+    name:"Atlas",
+    parts:[
+      µArmorPlate(),
+      µCargoClamp()
+    ],
+    payload:1,
+    position:{
+      x:0,
+      y:5
+    },
+    signal:88
+  },
+  {
+    archetype:µWispRelayDrone(),
+    battery:71,
+    damage:0,
+    id:µRobotId("wisp-1"),
+    locationLabel:"Access duct E2",
+    name:"Wisp",
+    parts:[
+      µSignalRelay(),
+      µThermalDampener()
+    ],
+    payload:0,
+    position:{
+      x:4,
+      y:1
+    },
+    signal:81
+  }
+]
+
+λentryPlanEventMessage(entryPlan:µMissionEntryPlan)=>String match entryPlan{
+  µEntryBadgeSpoof()=>"Relay network seeded and remote units staged."|
+  µEntryDuctInsertion()=>"Maintenance ducts spoofed and recon drones slipped under the first sweep."|
+  µEntryDockBreach()=>"Loading dock distraction staged before the heavy breach."
+}
+
+λentryPlanExposure(entryPlan:µMissionEntryPlan)=>Int match entryPlan{
+  µEntryBadgeSpoof()=>12|
+  µEntryDuctInsertion()=>9|
+  µEntryDockBreach()=>16
+}
+
+λentryPlanMissionClock(entryPlan:µMissionEntryPlan)=>Int match entryPlan{
+  µEntryBadgeSpoof()=>42|
+  µEntryDuctInsertion()=>39|
+  µEntryDockBreach()=>45
+}
+
+λentryPlanOrders(entryPlan:µMissionEntryPlan)=>[µRobotOrder] match entryPlan{
+  µEntryBadgeSpoof()=>defaultOrders()|
+  µEntryDuctInsertion()=>ductInsertionOrders()|
+  µEntryDockBreach()=>dockBreachOrders()
+}
+
+λentryPlanRobots(entryPlan:µMissionEntryPlan)=>[µRobotState] match entryPlan{
+  µEntryBadgeSpoof()=>badgeSpoofRobots()|
+  µEntryDuctInsertion()=>ductInsertionRobots()|
+  µEntryDockBreach()=>dockBreachRobots()
+}
+
+λentryPlanSeedOffset(entryPlan:µMissionEntryPlan)=>Int match entryPlan{
+  µEntryBadgeSpoof()=>0|
+  µEntryDuctInsertion()=>1|
+  µEntryDockBreach()=>2
+}
+
+λentryPlanTrace(entryPlan:µMissionEntryPlan)=>Int match entryPlan{
+  µEntryBadgeSpoof()=>41|
+  µEntryDuctInsertion()=>24|
+  µEntryDockBreach()=>53
+}
+
 λfacilityRoomCount(state:µGameState)=>Int=state.activeMission.facility.rooms reduce (λ(count:Int,room:µRoomState)=>Int=count+1) from 0
+
+λhelixgridContract()=>µContractSummary={
+  contractId:µContractId("helixgrid-battery-recovery"),
+  corporation:µCorporationId("helixgrid"),
+  label:"Recover the prototype cryocell battery",
+  objective:µStealPrototypeBattery()
+}
 
 λinitialCampaignState()=>µCampaignState={
   availableContracts:defaultContracts(),
@@ -111,73 +400,113 @@
   }
 }
 
-λinitialGameState()=>µGameState={
-  activeMission:initialMissionState(),
-  campaign:initialCampaignState(),
-  eventLog:[
-    {
-      message:"Mission package assembled for HelixGrid battery recovery.",
-      turn:0
-    },
-    {
-      message:"Relay network seeded and remote units staged.",
-      turn:1
-    }
-  ],
-  schemaVersion:1,
-  seed:1337,
-  turn:1
-}
-
-λinitialMissionState()=>µMissionState={
-  alarmLevel:µAlarmSuspicion(),
-  contract:{
-    contractId:µContractId("helixgrid-battery-recovery"),
-    corporation:µCorporationId("helixgrid"),
-    label:"Recover the prototype cryocell battery",
-    objective:µStealPrototypeBattery()
+λinitialEventLog(config:µMissionConfigState,contract:µContractSummary)=>[µEventEntry]=[
+  {
+    message:contractOperationMessage(contract),
+    turn:0
   },
-  exposure:12,
-  facility:•facilityGenerator.generateFacilityState(1337),
+  {
+    message:entryPlanEventMessage(config.entryPlan),
+    turn:1
+  }
+]
+
+λinitialGameState()=>µGameState=operationState(
+  initialCampaignState(),
+  defaultMissionConfig(),
+  helixgridContract(),
+  µShellContractLobby()
+)
+
+λinitialMissionState(config:µMissionConfigState,contract:µContractSummary)=>µMissionState={
+  alarmLevel:missionAlarmLevel(config),
+  contract:contract,
+  exposure:entryPlanExposure(config.entryPlan),
+  facility:•facilityGenerator.generateFacilityState(missionSeed(
+    config,
+    contract
+  )),
   interrupts:[],
-  missionClock:42,
+  missionClock:entryPlanMissionClock(config.entryPlan),
   objective:{
     extracted:false,
-    kind:µStealPrototypeBattery(),
+    kind:contract.objective,
     located:false,
     objectiveId:µObjectiveId("prototype-battery"),
     securedBy:None()
   },
-  orders:[
-    {
-      assignedRobot:µRobotId("gecko-1"),
-      order:µScan(),
-      status:µOrderQueued()
-    },
-    {
-      assignedRobot:µRobotId("mira-1"),
-      order:µHold(),
-      status:µOrderQueued()
-    },
-    {
-      assignedRobot:µRobotId("atlas-1"),
-      order:µMoveTo({
-        x:0,
-        y:5
-      }),
-      status:µOrderQueued()
-    },
-    {
-      assignedRobot:µRobotId("wisp-1"),
-      order:µReturnToRelay(),
-      status:µOrderQueued()
-    }
-  ],
-  robots:defaultRobots(),
+  orders:entryPlanOrders(config.entryPlan),
+  robots:entryPlanRobots(config.entryPlan),
   status:µMissionInProgress(),
-  trace:41
+  trace:entryPlanTrace(config.entryPlan)
+}
+
+λmissionAlarmLevel(config:µMissionConfigState)=>µAlarmLevel match config.entryPlan{
+  µEntryBadgeSpoof()=>µAlarmSuspicion()|
+  µEntryDuctInsertion()=>µAlarmNormal()|
+  µEntryDockBreach()=>µAlarmCounterOperatorTrace()
+}
+
+λmissionSeed(config:µMissionConfigState,contract:µContractSummary)=>Int=contractBaseSeed(contract)+entryPlanSeedOffset(config.entryPlan)
+
+λmorrowContract()=>µContractSummary={
+  contractId:µContractId("morrow-audit-lift"),
+  corporation:µCorporationId("morrow-dynamics"),
+  label:"Lift the superconducting cryocell from audit storage",
+  objective:µStealPrototypeBattery()
+}
+
+λnightglassContract()=>µContractSummary={
+  contractId:µContractId("nightglass-dawn-snatch"),
+  corporation:µCorporationId("nightglass"),
+  label:"Snatch the sealed battery sample before dawn",
+  objective:µStealPrototypeBattery()
+}
+
+λoperationState(campaign:µCampaignState,config:µMissionConfigState,contract:µContractSummary,stage:µShellStage)=>µGameState={
+  activeMission:initialMissionState(
+    config,
+    contract
+  ),
+  campaign:campaignWithDefaultContracts(campaign),
+  eventLog:initialEventLog(
+    config,
+    contract
+  ),
+  missionConfig:config,
+  schemaVersion:1,
+  seed:missionSeed(
+    config,
+    contract
+  ),
+  shellStage:stage,
+  turn:1
 }
 
 λorderCount(state:µGameState)=>Int=state.activeMission.orders reduce (λ(count:Int,robotOrder:µRobotOrder)=>Int=count+1) from 0
 
+λqueuedOrder(order:µOrder,robotId:µRobotId)=>µRobotOrder={
+  assignedRobot:robotId,
+  order:order,
+  status:µOrderQueued()
+}
+
 λrosterCount(state:µGameState)=>Int=state.activeMission.robots reduce (λ(count:Int,robot:µRobotState)=>Int=count+1) from 0
+
+λupgradeLegacyCampaign(campaign:µCampaignState)=>µCampaignState={
+  availableContracts:defaultContracts(),
+  completedContracts:campaign.completedContracts,
+  heat:campaign.heat,
+  warehouse:campaign.warehouse
+}
+
+λupgradeLegacyGameState(state:µLegacyGameState)=>µGameState={
+  activeMission:state.activeMission,
+  campaign:upgradeLegacyCampaign(state.campaign),
+  eventLog:state.eventLog,
+  missionConfig:defaultMissionConfig(),
+  schemaVersion:state.schemaVersion,
+  seed:state.seed,
+  shellStage:µShellMissionLive(),
+  turn:state.turn
+}

@@ -1,3 +1,19 @@
+λlegacyCampaignState()=>µCampaignState={
+  availableContracts:[],
+  completedContracts:•gameState.initialGameState().campaign.completedContracts,
+  heat:•gameState.initialGameState().campaign.heat,
+  warehouse:•gameState.initialGameState().campaign.warehouse
+}
+
+λlegacyGameState()=>µLegacyGameState={
+  activeMission:•gameState.initialGameState().activeMission,
+  campaign:legacyCampaignState(),
+  eventLog:•gameState.initialGameState().eventLog,
+  schemaVersion:•gameState.initialGameState().schemaVersion,
+  seed:•gameState.initialGameState().seed,
+  turn:•gameState.initialGameState().turn
+}
+
 λmain()=>Unit=()
 
 test "initial game state has four robots" {
@@ -10,4 +26,14 @@ test "initial game state has four queued orders" {
 
 test "initial facility includes seven rooms" {
   •gameState.facilityRoomCount(•gameState.initialGameState())=7
+}
+
+test "legacy upgrades restore contract lobby data and mission shell state" {
+  l upgradedCampaign=(•gameState.upgradeLegacyCampaign(legacyCampaignState()):µCampaignState);
+  l upgradedState=(•gameState.upgradeLegacyGameState(legacyGameState()):µGameState);
+  #upgradedCampaign.availableContracts=3
+    and upgradedCampaign.heat=legacyCampaignState().heat
+    and #upgradedState.campaign.availableContracts=3
+    and upgradedState.missionConfig=•gameState.defaultMissionConfig()
+    and upgradedState.shellStage=µShellMissionLive()
 }

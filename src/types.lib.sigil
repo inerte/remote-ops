@@ -10,6 +10,7 @@ t AppBootstrap={
   mission:MissionSummary,
   packets:[PacketSummary],
   robots:[RobotSummary],
+  shell:ShellSummary,
   tagline:String,
   title:String
 }
@@ -44,6 +45,16 @@ t CampaignState={
 }
 
 t ContractId=ContractId(String)
+
+t ContractLobbySummary={
+  contractId:String,
+  corporation:String,
+  label:String,
+  objective:String,
+  risk:String,
+  selected:Bool,
+  summary:String
+}
 
 t ContractSummary={
   contractId:ContractId,
@@ -99,16 +110,11 @@ t GameState={
   activeMission:MissionState,
   campaign:CampaignState,
   eventLog:[EventEntry],
+  missionConfig:MissionConfigState,
   schemaVersion:Int,
   seed:Int,
+  shellStage:ShellStage,
   turn:Int
-}
-
-t SaveFile={
-  gameVersion:String,
-  savedAt:String,
-  schemaVersion:Int,
-  state:GameState
 }
 
 t Interrupt=AlarmChanged(AlarmLevel)|CameraDetectedRobot(
@@ -130,6 +136,34 @@ t InventoryItem={
   partType:RobotPartType,
   quantity:Int
 }
+
+t LegacyGameState={
+  activeMission:MissionState,
+  campaign:CampaignState,
+  eventLog:[EventEntry],
+  schemaVersion:Int,
+  seed:Int,
+  turn:Int
+}
+
+t LegacySaveFile={
+  gameVersion:String,
+  savedAt:String,
+  schemaVersion:Int,
+  state:LegacyGameState
+}
+
+t MissionConfigOptionSummary={
+  effects:[String],
+  id:String,
+  label:String,
+  selected:Bool,
+  summary:String
+}
+
+t MissionConfigState={entryPlan:MissionEntryPlan}
+
+t MissionEntryPlan=EntryBadgeSpoof()|EntryDuctInsertion()|EntryDockBreach()
 
 t MissionSummary={
   alarmLevel:String,
@@ -191,17 +225,6 @@ t Position={
   y:Int
 }
 
-t RoomId=RoomId(String)
-
-t RoomKind=Ducts()|Lab()|LoadingDock()|Lobby()|ServerRoom()|ServiceCorridor()|Vault()
-
-t RoomState={
-  label:String,
-  roomId:RoomId,
-  roomKind:RoomKind,
-  tiles:[Position]
-}
-
 t ReplayAction=ReplayAcknowledgeInterrupts()|ReplayQueueOrder(
   RobotId,
   Order
@@ -254,6 +277,24 @@ t RobotSummary={
   signal:String
 }
 
+t RoomId=RoomId(String)
+
+t RoomKind=Ducts()|Lab()|LoadingDock()|Lobby()|ServerRoom()|ServiceCorridor()|Vault()
+
+t RoomState={
+  label:String,
+  roomId:RoomId,
+  roomKind:RoomKind,
+  tiles:[Position]
+}
+
+t SaveFile={
+  gameVersion:String,
+  savedAt:String,
+  schemaVersion:Int,
+  state:GameState
+}
+
 t SecurityEntity={
   entityId:String,
   kind:SecurityEntityKind,
@@ -262,6 +303,18 @@ t SecurityEntity={
 }
 
 t SecurityEntityKind=Camera()|Guard()|SecurityDrone()
+
+t ShellStage=ShellContractLobby()|ShellMissionConfig()|ShellMissionLive()
+
+t ShellSummary={
+  activeStage:String,
+  configOptions:[MissionConfigOptionSummary],
+  contractOptions:[ContractLobbySummary],
+  selectedConfigId:String,
+  selectedContractId:String,
+  stageSummary:String,
+  stageTitle:String
+}
 
 t TerminalId=TerminalId(String)
 

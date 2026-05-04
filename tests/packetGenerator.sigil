@@ -37,8 +37,10 @@
   },
   campaign:state.campaign,
   eventLog:state.eventLog,
+  missionConfig:state.missionConfig,
   schemaVersion:state.schemaVersion,
   seed:seed,
+  shellStage:state.shellStage,
   turn:state.turn
 }
 

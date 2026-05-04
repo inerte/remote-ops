@@ -1,3 +1,5 @@
 derive json µReplayLog
 
 derive json µSaveFile
+
+derive json µLegacySaveFile

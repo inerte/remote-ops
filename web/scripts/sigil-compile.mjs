@@ -19,8 +19,14 @@ const declarationFiles = [
       'export function advanceBrowserShell(autosave: string): Promise<unknown>;\n' +
       'export function bootstrap(): Promise<unknown>;\n' +
       'export function hydrateBrowserShell(autosave: string): Promise<unknown>;\n' +
+      'export function launchBrowserMission(autosave: string): Promise<unknown>;\n' +
+      'export function openMissionConfig(autosave: string): Promise<unknown>;\n' +
       'export function queueBrowserOrder(autosave: string, command: unknown): Promise<unknown>;\n' +
-      'export function resetBrowserShell(): Promise<unknown>;\n',
+      'export function resetBrowserShell(): Promise<unknown>;\n' +
+      'export function returnToContractLobby(autosave: string): Promise<unknown>;\n' +
+      'export function returnToMissionConfig(autosave: string): Promise<unknown>;\n' +
+      'export function selectBrowserContract(autosave: string, contractId: string): Promise<unknown>;\n' +
+      'export function setBrowserEntryPlan(autosave: string, entryPlanId: string): Promise<unknown>;\n',
   },
   {
     relativePath: 'src/saveCodecs.d.mts',

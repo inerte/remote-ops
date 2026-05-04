@@ -14,8 +14,10 @@
   },
   campaign:state.campaign,
   eventLog:state.eventLog,
+  missionConfig:state.missionConfig,
   schemaVersion:state.schemaVersion,
   seed:state.seed,
+  shellStage:state.shellStage,
   turn:state.turn
 }
 
@@ -335,8 +337,10 @@
     message,
     state
   ),
+  missionConfig:state.missionConfig,
   schemaVersion:state.schemaVersion,
   seed:state.seed,
+  shellStage:state.shellStage,
   turn:state.turn+1
 }
 

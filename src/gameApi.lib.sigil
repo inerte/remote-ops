@@ -1,18 +1,24 @@
 λacknowledgeBrowserShell(autosave:String)=>µAppBootstrap=browserShell(acknowledgePendingInterrupts(loadAutosaveState(autosave)))
 
-λacknowledgePendingInterrupts(state:µGameState)=>µGameState match state.activeMission.interrupts{
-  []=>state|
-  _=>•simulation.acknowledgeInterrupts(state)
+λacknowledgePendingInterrupts(state:µGameState)=>µGameState match shellStageIsMission(state){
+  true=>match state.activeMission.interrupts{
+    []=>state|
+    _=>•simulation.acknowledgeInterrupts(state)
+  }|
+  false=>state
 }
 
 λadvanceBrowserShell(autosave:String)=>µAppBootstrap=browserShell(advanceToCheckpoint(loadAutosaveState(autosave)))
 
-λadvanceToCheckpoint(state:µGameState)=>µGameState match state.activeMission.interrupts{
-  []=>•simulation.resumeUntilInterrupt(
-    browserAdvanceLimit(),
-    state
-  )|
-  _=>state
+λadvanceToCheckpoint(state:µGameState)=>µGameState match shellStageIsMission(state){
+  true=>match state.activeMission.interrupts{
+    []=>•simulation.resumeUntilInterrupt(
+      browserAdvanceLimit(),
+      state
+    )|
+    _=>state
+  }|
+  false=>state
 }
 
 λalarmLevelDisplay(alarm:µAlarmLevel)=>String=alarmLevelName(alarm)
@@ -46,8 +52,10 @@
     message:message,
     turn:state.turn
   }],
+  missionConfig:state.missionConfig,
   schemaVersion:state.schemaVersion,
   seed:state.seed,
+  shellStage:state.shellStage,
   turn:state.turn
 }
 
@@ -293,45 +301,88 @@
   mission:missionSummary(state),
   packets:•packetGenerator.generatePackets(state),
   robots:robotSummaries(state.activeMission.robots),
+  shell:shellSummary(state),
   tagline:"Illegal operators, disposable hardware, and no punishment for thinking.",
   title:"Remote Ops"
 }
 
-λcanAcknowledgeInterrupts(state:µGameState)=>Bool=missionIsInProgress(state.activeMission.status) and hasPendingInterrupts(state)
+λcanAcknowledgeInterrupts(state:µGameState)=>Bool=shellStageIsMission(state)
+  and missionIsInProgress(state.activeMission.status)
+  and hasPendingInterrupts(state)
 
-λcanAdvanceSimulation(state:µGameState)=>Bool match hasPendingInterrupts(state){
-  true=>false|
-  false=>match hasQueuedOrders(state){
-    true=>missionIsInProgress(state.activeMission.status)|
-    false=>false
-  }
-}
-
-λcanQueueOrders(state:µGameState)=>Bool match missionIsInProgress(state.activeMission.status){
+λcanAdvanceSimulation(state:µGameState)=>Bool match shellStageIsMission(state){
   true=>match hasPendingInterrupts(state){
     true=>false|
-    false=>true
+    false=>match hasQueuedOrders(state){
+      true=>missionIsInProgress(state.activeMission.status)|
+      false=>false
+    }
   }|
   false=>false
 }
 
-λcontrolStatus(state:µGameState)=>String match state.activeMission.status{
-  µMissionAborted()=>"Mission aborted. Review the debrief or replay the deterministic opening."|
-  µMissionExtracted()=>"Mission complete. Review the debrief, export packets, or replay the deterministic opening."|
-  µMissionFailed(reason)=>"Mission failed: "
-    ++reason
-    ++". Review the debrief or reset to try again."|
-  µMissionInProgress()=>match hasPendingInterrupts(state){
-    true=>"Interrupts are waiting. Acknowledge them before advancing the simulation."|
-    false=>match hasQueuedOrders(state){
-      true=>"Advance the deterministic simulation until the next interrupt or status change. Queue more orders from the browser shell if needed."|
-      false=>"No queued orders remain. Queue more orders from the browser shell or reset the mission to replay the opener."
+λcanQueueOrders(state:µGameState)=>Bool match shellStageIsMission(state){
+  true=>match missionIsInProgress(state.activeMission.status){
+    true=>match hasPendingInterrupts(state){
+      true=>false|
+      false=>true
+    }|
+    false=>false
+  }|
+  false=>false
+}
+
+λcontractIdValue(contractId:µContractId)=>String match contractId{
+  µContractId(value)=>value
+}
+
+λcontractLobbyRisk(contract:µContractSummary)=>String match contract.contractId{
+  µContractId("helixgrid-battery-recovery")=>"Balanced opposition"|
+  µContractId("morrow-audit-lift")=>"Camera-heavy interior"|
+  µContractId("nightglass-dawn-snatch")=>"Fast patrol rotations"|
+  _=>"Unrated"
+}
+
+λcontractLobbySummaryText(contract:µContractSummary)=>String match contract.contractId{
+  µContractId("helixgrid-battery-recovery")=>"Cold-storage lab access with a predictable patrol lattice and standard counter-operator trace."|
+  µContractId("morrow-audit-lift")=>"Audit storage turnover opens a narrow theft window, but the surveillance mesh is denser than usual."|
+  µContractId("nightglass-dawn-snatch")=>"Nightglass is moving the sample before dawn, forcing a tighter extraction clock and faster patrol loops."|
+  _=>"Deterministic contract package ready for selection."
+}
+
+λcontractOptionSummary(contract:µContractSummary,selectedContractId:String)=>µContractLobbySummary={
+  contractId:contractIdValue(contract.contractId),
+  corporation:corporationDisplayName(contract.corporation),
+  label:contract.label,
+  objective:objectiveKindDisplay(contract.objective),
+  risk:contractLobbyRisk(contract),
+  selected:contractIdValue(contract.contractId)=selectedContractId,
+  summary:contractLobbySummaryText(contract)
+}
+
+λcontrolStatus(state:µGameState)=>String match state.shellStage{
+  µShellContractLobby()=>"Select a contract, review any stored autosaves, and move into briefing when the crew is ready."|
+  µShellMissionConfig()=>"Tune the entry plan, review the deterministic preview, and launch when the operation looks right."|
+  µShellMissionLive()=>match state.activeMission.status{
+    µMissionAborted()=>"Mission aborted. Review the debrief or return to briefing for another run."|
+    µMissionExtracted()=>"Mission complete. Review the debrief, export packets, or return to briefing for another branch."|
+    µMissionFailed(reason)=>"Mission failed: "
+      ++reason
+      ++". Review the debrief or return to briefing to try again."|
+    µMissionInProgress()=>match hasPendingInterrupts(state){
+      true=>"Interrupts are waiting. Acknowledge them before advancing the simulation."|
+      false=>match hasQueuedOrders(state){
+        true=>"Advance the deterministic simulation until the next interrupt or status change. Queue more orders from the browser shell if needed."|
+        false=>"No queued orders remain. Queue more orders from the browser shell or return to briefing to replay the opener."
+      }
     }
   }
 }
 
 λcorporationDisplayName(corporationId:µCorporationId)=>String match corporationId{
   µCorporationId("helixgrid")=>"HelixGrid"|
+  µCorporationId("morrow-dynamics")=>"Morrow Dynamics"|
+  µCorporationId("nightglass")=>"Nightglass Systems"|
   µCorporationId(value)=>value
 }
 
@@ -398,6 +449,54 @@
   µMissionInProgress()=>"info"
 }
 
+λentryPlanEffects(entryPlan:µMissionEntryPlan)=>[String] match entryPlan{
+  µEntryBadgeSpoof()=>[
+    "Keeps the opener at 07:42 with suspicion-tier alarm pressure.",
+    "Seeds the queue with Gecko recon, Mira hold, Atlas movement, and a relay refresh.",
+    "Best fit when you want the familiar prototype opener before improvising."
+  ]|
+  µEntryDockBreach()=>[
+    "Starts Atlas on the loading line with exposure already elevated to 16.",
+    "Counter-operator trace opens hot at 53% to trade stealth for immediate board position.",
+    "Queue prioritizes heavy movement and shadow support over early scanning."
+  ]|
+  µEntryDuctInsertion()=>[
+    "Drops the opener to 07:39 and lowers trace to 24% for a quieter first branch.",
+    "Stages Gecko and Wisp deeper in the access ducts for faster recon coverage.",
+    "Queue favors reconnaissance and terminal pressure before the heavy unit commits."
+  ]
+}
+
+λentryPlanFromId(entryPlanId:String)=>µMissionEntryPlan match entryPlanId{
+  "badge-spoof"=>µEntryBadgeSpoof()|
+  "dock-breach"=>µEntryDockBreach()|
+  "duct-insertion"=>µEntryDuctInsertion()|
+  _=>µEntryBadgeSpoof()
+}
+
+λentryPlanId(entryPlan:µMissionEntryPlan)=>String match entryPlan{
+  µEntryBadgeSpoof()=>"badge-spoof"|
+  µEntryDockBreach()=>"dock-breach"|
+  µEntryDuctInsertion()=>"duct-insertion"
+}
+
+λentryPlanLabel(entryPlan:µMissionEntryPlan)=>String match entryPlan{
+  µEntryBadgeSpoof()=>"Service badge spoof"|
+  µEntryDockBreach()=>"Loading dock breach"|
+  µEntryDuctInsertion()=>"Maintenance duct insertion"
+}
+
+λentryPlanSummary(entryPlan:µMissionEntryPlan)=>String match entryPlan{
+  µEntryBadgeSpoof()=>"Balanced opener with stable positions, standard trace, and the familiar seeded order queue."|
+  µEntryDockBreach()=>"Louder breach profile that pushes Atlas forward immediately and accepts a hotter trace baseline."|
+  µEntryDuctInsertion()=>"Quieter infiltration that starts the recon package deeper inside the facility and earlier on the clock."
+}
+
+λfindAvailableContract(contractId:String,state:µGameState)=>Option[µContractSummary]=§list.find(
+  λ(contract:µContractSummary)=>Bool=contractIdValue(contract.contractId)=contractId,
+  state.campaign.availableContracts
+)
+
 λfindFacilityTile(position:µPosition,state:µGameState)=>Option[µFacilityTile]=§list.find(
   λ(tile:µFacilityTile)=>Bool=tile.position=position,
   state.activeMission.facility.tiles
@@ -462,12 +561,30 @@
 
 λinterruptsForShell(interrupts:[µInterrupt])=>[String]=interrupts map (λ(interrupt:µInterrupt)=>String=•packetGenerator.interruptLabel(interrupt))
 
+λlaunchBrowserMission(autosave:String)=>µAppBootstrap=browserShell(launchBrowserMissionState(loadAutosaveState(autosave)))
+
+λlaunchBrowserMissionState(state:µGameState)=>µGameState=replaceShellStage(
+  µShellMissionLive(),
+  state
+)
+
 λloadAutosaveState(autosave:String)=>µGameState match •saveCodecs.parseSaveFile(autosave){
   Ok(saveFile)=>•saveApi.loadGameState(saveFile)|
-  Err(_)=>bootstrapState()
+  Err(_)=>match •saveCodecs.parseLegacySaveFile(autosave){
+    Ok(saveFile)=>•gameState.upgradeLegacyGameState(saveFile.state)|
+    Err(_)=>bootstrapState()
+  }
 }
 
 λmissionClockLabel(clock:Int)=>String="07:"++twoDigit(clock)
+
+λmissionConfigOptionSummary(entryPlan:µMissionEntryPlan,selectedEntryPlan:µMissionEntryPlan)=>µMissionConfigOptionSummary={
+  effects:entryPlanEffects(entryPlan),
+  id:entryPlanId(entryPlan),
+  label:entryPlanLabel(entryPlan),
+  selected:entryPlan=selectedEntryPlan,
+  summary:entryPlanSummary(entryPlan)
+}
 
 λmissionIsInProgress(status:µMissionStatus)=>Bool match status{
   µMissionInProgress()=>true|
@@ -501,6 +618,11 @@
   turn:state.turn
 }
 
+λobjectiveKindDisplay(kind:µObjectiveKind)=>String match kind{
+  µPhotographPrototypeBattery()=>"Photograph prototype battery"|
+  µStealPrototypeBattery()=>"Steal prototype battery"
+}
+
 λobjectiveSiteLabel(rooms:[µRoomState])=>String match hasLabRoom(rooms){
   true=>"cold-storage lab"|
   false=>"facility"
@@ -521,6 +643,13 @@
   ++" from the "
   ++objectiveSiteLabel(mission.facility.rooms)
   ++"."
+
+λopenMissionConfig(autosave:String)=>µAppBootstrap=browserShell(openMissionConfigState(loadAutosaveState(autosave)))
+
+λopenMissionConfigState(state:µGameState)=>µGameState=resetOperationStage(
+  µShellMissionConfig(),
+  state
+)
 
 λpacketCount()=>Int=•packetGenerator.packetCount(bootstrapState())
 
@@ -554,12 +683,15 @@
 λqueueableMissionState(state:µGameState)=>Result[
   µGameState,
   String
-] match missionIsInProgress(state.activeMission.status){
-  true=>match hasPendingInterrupts(state){
-    true=>Err("Acknowledge interrupts before queuing new orders.")|
-    false=>Ok(state)
+] match shellStageIsMission(state){
+  true=>match missionIsInProgress(state.activeMission.status){
+    true=>match hasPendingInterrupts(state){
+      true=>Err("Acknowledge interrupts before queuing new orders.")|
+      false=>Ok(state)
+    }|
+    false=>Err("Mission is no longer in progress.")
   }|
-  false=>Err("Mission is no longer in progress.")
+  false=>Err("Launch the mission from briefing before queuing browser orders.")
 }
 
 λqueuedRobotOrder(order:µOrder,robotId:µRobotId)=>µRobotOrder={
@@ -568,7 +700,25 @@
   status:µOrderQueued()
 }
 
+λreplaceShellStage(stage:µShellStage,state:µGameState)=>µGameState={
+  activeMission:state.activeMission,
+  campaign:state.campaign,
+  eventLog:state.eventLog,
+  missionConfig:state.missionConfig,
+  schemaVersion:state.schemaVersion,
+  seed:state.seed,
+  shellStage:stage,
+  turn:state.turn
+}
+
 λresetBrowserShell()=>µAppBootstrap=browserShell(bootstrapState())
+
+λresetOperationStage(stage:µShellStage,state:µGameState)=>µGameState=•gameState.operationState(
+  state.campaign,
+  state.missionConfig,
+  state.activeMission.contract,
+  stage
+)
 
 λresolveBrowserRobot(robotId:String,state:µGameState)=>Result[
   µRobotState,
@@ -582,6 +732,20 @@
     ++robotId
     ++"'.")
 }
+
+λreturnToContractLobby(autosave:String)=>µAppBootstrap=browserShell(returnToContractLobbyState(loadAutosaveState(autosave)))
+
+λreturnToContractLobbyState(state:µGameState)=>µGameState=resetOperationStage(
+  µShellContractLobby(),
+  state
+)
+
+λreturnToMissionConfig(autosave:String)=>µAppBootstrap=browserShell(returnToMissionConfigState(loadAutosaveState(autosave)))
+
+λreturnToMissionConfigState(state:µGameState)=>µGameState=resetOperationStage(
+  µShellMissionConfig(),
+  state
+)
 
 λreverseStrings(lines:[String])=>[String]=lines reduce (λ(reversed:[String],line:String)=>[String]=[line]⧺reversed) from []
 
@@ -625,6 +789,88 @@
   )
 })
 
+λselectBrowserContract(autosave:String,contractId:String)=>µAppBootstrap=browserShell(selectBrowserContractState(
+  contractId,
+  loadAutosaveState(autosave)
+))
+
+λselectBrowserContractState(contractId:String,state:µGameState)=>µGameState match findAvailableContract(
+  contractId,
+  state
+){
+  Some(contract)=>•gameState.operationState(
+    state.campaign,
+    •gameState.defaultMissionConfig(),
+    contract,
+    µShellContractLobby()
+  )|
+  None()=>state
+}
+
+λsetBrowserEntryPlan(autosave:String,entryPlanId:String)=>µAppBootstrap=browserShell(setBrowserEntryPlanState(
+  entryPlanId,
+  loadAutosaveState(autosave)
+))
+
+λsetBrowserEntryPlanState(entryPlanId:String,state:µGameState)=>µGameState=•gameState.operationState(
+  state.campaign,
+  {entryPlan:entryPlanFromId(entryPlanId)},
+  state.activeMission.contract,
+  µShellMissionConfig()
+)
+
+λshellStageId(stage:µShellStage)=>String match stage{
+  µShellContractLobby()=>"lobby"|
+  µShellMissionConfig()=>"config"|
+  µShellMissionLive()=>"mission"
+}
+
+λshellStageIsMission(state:µGameState)=>Bool match state.shellStage{
+  µShellMissionLive()=>true|
+  _=>false
+}
+
+λshellStageSummaryText(state:µGameState)=>String match state.shellStage{
+  µShellContractLobby()=>"Review available contracts, compare operator risk, and step into briefing once the crew commits."|
+  µShellMissionConfig()=>"Choose the entry plan, inspect the deterministic preview, and launch when the operation feels right."|
+  µShellMissionLive()=>match state.activeMission.status{
+    µMissionInProgress()=>"The crew is in the field. Queue high-level orders, work the interrupt queue, or fall back to briefing."|
+    _=>"Mission thread complete. Review the debrief, export packets, or return to briefing for another branch."
+  }
+}
+
+λshellStageTitle(stage:µShellStage)=>String match stage{
+  µShellContractLobby()=>"Operation lobby"|
+  µShellMissionConfig()=>"Mission briefing"|
+  µShellMissionLive()=>"Live mission"
+}
+
+λshellSummary(state:µGameState)=>µShellSummary={
+  activeStage:shellStageId(state.shellStage),
+  configOptions:[
+    missionConfigOptionSummary(
+      µEntryBadgeSpoof(),
+      state.missionConfig.entryPlan
+    ),
+    missionConfigOptionSummary(
+      µEntryDuctInsertion(),
+      state.missionConfig.entryPlan
+    ),
+    missionConfigOptionSummary(
+      µEntryDockBreach(),
+      state.missionConfig.entryPlan
+    )
+  ],
+  contractOptions:state.campaign.availableContracts map (λ(contract:µContractSummary)=>µContractLobbySummary=contractOptionSummary(
+    contract,
+    contractIdValue(state.activeMission.contract.contractId)
+  )),
+  selectedConfigId:entryPlanId(state.missionConfig.entryPlan),
+  selectedContractId:contractIdValue(state.activeMission.contract.contractId),
+  stageSummary:shellStageSummaryText(state),
+  stageTitle:shellStageTitle(state.shellStage)
+}
+
 λtakeStrings(limit:Int,lines:[String])=>[String] match limit{
   0=>[]|
   _=>match lines{
@@ -660,8 +906,10 @@
   },
   campaign:state.campaign,
   eventLog:state.eventLog,
+  missionConfig:state.missionConfig,
   schemaVersion:state.schemaVersion,
   seed:state.seed,
+  shellStage:state.shellStage,
   turn:state.turn
 }
 

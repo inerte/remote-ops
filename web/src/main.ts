@@ -3,8 +3,14 @@ import {
   loadHydratedShell,
   runAcknowledgeShell,
   runAdvanceShell,
+  runLaunchMission,
+  runOpenMissionConfig,
   runQueueOrder,
   runResetShell,
+  runReturnToContractLobby,
+  runReturnToMissionConfig,
+  runSelectContract,
+  runSetEntryPlan,
 } from './app/bootstrap'
 import {
   createOrderDraft,
@@ -114,14 +120,47 @@ const loadInitialShell = async (): Promise<AppBootstrap> => {
   return loadHydratedShell(storedAutosave)
 }
 
-const createDefaultOrderStatus = (shell: AppBootstrap): StatusMessage => ({
-  state: 'idle',
-  text: shell.debrief.isTerminal
-    ? `${shell.debrief.outcome}. Replay or restore a saved run to issue more orders.`
-    : shell.controls.canQueueOrders
-      ? 'Choose a robot, queue a high-level order, then advance the deterministic shell.'
-      : 'High-level order entry unlocks once interrupts are cleared and the mission is still active.',
-})
+const isMissionStage = (shell: AppBootstrap): boolean => shell.shell.activeStage === 'mission'
+
+const createActionTone = (shell: AppBootstrap): StatusMessage['state'] => {
+  if (isMissionStage(shell) === false) {
+    return 'idle'
+  }
+
+  if (shell.debrief.tone === 'success') {
+    return 'success'
+  }
+
+  if (shell.debrief.tone === 'error') {
+    return 'error'
+  }
+
+  return 'idle'
+}
+
+const createDefaultOrderStatus = (shell: AppBootstrap): StatusMessage => {
+  switch (shell.shell.activeStage) {
+    case 'lobby':
+      return {
+        state: 'idle',
+        text: 'Select a contract, then open the mission briefing before queueing browser orders.',
+      }
+    case 'config':
+      return {
+        state: 'idle',
+        text: 'Choose an entry plan and launch the mission before queueing browser orders.',
+      }
+    case 'mission':
+      return {
+        state: 'idle',
+        text: shell.debrief.isTerminal
+          ? `${shell.debrief.outcome}. Replay from briefing or restore a saved run to issue more orders.`
+          : shell.controls.canQueueOrders
+            ? 'Choose a robot, queue a high-level order, then advance the deterministic shell.'
+            : 'High-level order entry unlocks once interrupts are cleared and the mission is still active.',
+      }
+  }
+}
 
 const createQueuedOrderStatus = (shell: AppBootstrap): StatusMessage => {
   const latestEvent = shell.eventLog.at(-1)?.message
@@ -164,15 +203,7 @@ const main = async (): Promise<void> => {
     const layout = renderLayout(app, shell, orderDraft)
     boardApp = await createBoard(layout.boardHost, shell.board, shell.robots)
 
-    setStatus(
-      layout.actionStatus,
-      shell.controls.status,
-      shell.debrief.tone === 'success'
-        ? 'success'
-        : shell.debrief.tone === 'error'
-          ? 'error'
-          : 'idle',
-    )
+    setStatus(layout.actionStatus, shell.controls.status, createActionTone(shell))
     setStatus(layout.orderStatus, orderStatus.text, orderStatus.state)
     setStatus(layout.saveStatus, saveStatus.text, saveStatus.state)
 
@@ -212,6 +243,62 @@ const main = async (): Promise<void> => {
       }
     }
 
+    for (const button of layout.contractButtons) {
+      button.addEventListener('click', () => {
+        const contractId = button.dataset.contractId
+        if (contractId === undefined) {
+          throw new Error('Contract option is missing its data-contract-id attribute.')
+        }
+
+        void runWorldAction(
+          () => runSelectContract(shell.autosave, contractId),
+          'Selecting contract package…',
+        )
+      })
+    }
+
+    layout.openConfigButton.addEventListener('click', () => {
+      void runWorldAction(
+        () => runOpenMissionConfig(shell.autosave),
+        'Opening mission briefing…',
+      )
+    })
+
+    for (const button of layout.configButtons) {
+      button.addEventListener('click', () => {
+        const entryPlanId = button.dataset.configId
+        if (entryPlanId === undefined) {
+          throw new Error('Mission config option is missing its data-config-id attribute.')
+        }
+
+        void runWorldAction(
+          () => runSetEntryPlan(shell.autosave, entryPlanId),
+          'Updating mission briefing…',
+        )
+      })
+    }
+
+    layout.launchMissionButton.addEventListener('click', () => {
+      void runWorldAction(
+        () => runLaunchMission(shell.autosave),
+        'Launching deterministic mission shell…',
+      )
+    })
+
+    layout.returnToConfigButton.addEventListener('click', () => {
+      void runWorldAction(
+        () => runReturnToMissionConfig(shell.autosave),
+        'Returning to mission briefing…',
+      )
+    })
+
+    layout.returnToLobbyButton.addEventListener('click', () => {
+      void runWorldAction(
+        () => runReturnToContractLobby(shell.autosave),
+        'Returning to contract lobby…',
+      )
+    })
+
     layout.advanceButton.addEventListener('click', () => {
       void runWorldAction(
         () => runAdvanceShell(shell.autosave),
@@ -227,11 +314,10 @@ const main = async (): Promise<void> => {
     })
 
     layout.resetButton.addEventListener('click', () => {
-      void runWorldAction(() => runResetShell(), 'Resetting mission state…')
-    })
-
-    layout.replayButton.addEventListener('click', () => {
-      void runWorldAction(() => runResetShell(), 'Replaying deterministic opening…')
+      void runWorldAction(
+        () => runResetShell(),
+        'Resetting shell to the default contract lobby…',
+      )
     })
 
     layout.autosaveButton.addEventListener('click', () => {

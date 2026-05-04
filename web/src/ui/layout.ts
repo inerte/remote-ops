@@ -14,6 +14,10 @@ interface LayoutHandle {
   readonly advanceButton: HTMLButtonElement
   readonly autosaveButton: HTMLButtonElement
   readonly boardHost: HTMLDivElement
+  readonly configButtons: NodeListOf<HTMLButtonElement>
+  readonly contractButtons: NodeListOf<HTMLButtonElement>
+  readonly launchMissionButton: HTMLButtonElement
+  readonly openConfigButton: HTMLButtonElement
   readonly orderFollowField: HTMLDivElement
   readonly orderForm: HTMLFormElement
   readonly orderHint: HTMLParagraphElement
@@ -27,9 +31,10 @@ interface LayoutHandle {
   readonly orderTypeField: HTMLSelectElement
   readonly packetButtons: NodeListOf<HTMLButtonElement>
   readonly packetStatus: HTMLParagraphElement
-  readonly replayButton: HTMLButtonElement
   readonly resetButton: HTMLButtonElement
   readonly restoreAutosaveButton: HTMLButtonElement
+  readonly returnToConfigButton: HTMLButtonElement
+  readonly returnToLobbyButton: HTMLButtonElement
   readonly saveStatus: HTMLParagraphElement
 }
 
@@ -45,10 +50,16 @@ const actionButtonMarkup = (
   label: string,
   attribute: string,
   disabled: boolean,
+  hidden = false,
+  variant: 'primary' | 'secondary' = 'primary',
 ): string => `
-  <button class="action-button" ${attribute} type="button"${disabled ? ' disabled' : ''}>
+  <button class="action-button${variant === 'secondary' ? ' action-button--secondary' : ''}" ${attribute} type="button"${disabled ? ' disabled' : ''}${hidden ? ' hidden' : ''}>
     ${escapeHtml(label)}
   </button>
+`
+
+const debriefEventMarkup = (message: string): string => `
+  <li class="debrief-event">${escapeHtml(message)}</li>
 `
 
 const eventMarkup = (entry: AppBootstrap['eventLog'][number]): string => `
@@ -58,12 +69,25 @@ const eventMarkup = (entry: AppBootstrap['eventLog'][number]): string => `
   </li>
 `
 
-const interruptMarkup = (interrupt: string): string => `
-  <li class="interrupt-entry">${escapeHtml(interrupt)}</li>
+const findSelectedConfig = (
+  bootstrap: AppBootstrap,
+): AppBootstrap['shell']['configOptions'][number] | undefined =>
+  bootstrap.shell.configOptions.find((option) => option.selected)
+
+const findSelectedContract = (
+  bootstrap: AppBootstrap,
+): AppBootstrap['shell']['contractOptions'][number] | undefined =>
+  bootstrap.shell.contractOptions.find((contract) => contract.selected)
+
+const headerMetricMarkup = (label: string, value: string): string => `
+  <div>
+    <dt>${escapeHtml(label)}</dt>
+    <dd>${escapeHtml(value)}</dd>
+  </div>
 `
 
-const debriefEventMarkup = (message: string): string => `
-  <li class="debrief-event">${escapeHtml(message)}</li>
+const interruptMarkup = (interrupt: string): string => `
+  <li class="interrupt-entry">${escapeHtml(interrupt)}</li>
 `
 
 const optionMarkup = (value: string, label: string, selected: boolean): string => `
@@ -77,10 +101,11 @@ const orderOptionMarkup = (
   selectedValue: BrowserOrderDraft['orderType'],
 ): string => optionMarkup(option.value, option.label, option.value === selectedValue)
 
-const robotOptionMarkup = (
-  robot: AppBootstrap['robots'][number],
-  selectedRobotId: string,
-): string => optionMarkup(robot.id, `${robot.name} · ${robot.id}`, robot.id === selectedRobotId)
+const packetMarkup = (packet: AppBootstrap['packets'][number]): string => `
+  <button class="packet-button" data-packet-id="${escapeHtml(packet.id)}" type="button">
+    Copy ${escapeHtml(packet.label)}
+  </button>
+`
 
 const robotMarkup = (robot: AppBootstrap['robots'][number]): string => `
   <article class="robot-card">
@@ -108,18 +133,213 @@ const robotMarkup = (robot: AppBootstrap['robots'][number]): string => `
   </article>
 `
 
-const packetMarkup = (packet: AppBootstrap['packets'][number]): string => `
-  <button class="packet-button" data-packet-id="${escapeHtml(packet.id)}" type="button">
-    Copy ${escapeHtml(packet.label)}
+const robotOptionMarkup = (
+  robot: AppBootstrap['robots'][number],
+  selectedRobotId: string,
+): string => optionMarkup(robot.id, `${robot.name} · ${robot.id}`, robot.id === selectedRobotId)
+
+const contractOptionMarkup = (
+  contract: AppBootstrap['shell']['contractOptions'][number],
+): string => `
+  <button
+    class="selection-card"
+    data-contract-id="${escapeHtml(contract.contractId)}"
+    data-select-contract
+    data-selected="${contract.selected ? 'true' : 'false'}"
+    type="button"
+  >
+    <div class="selection-card__header">
+      <div>
+        <p class="eyebrow">Contract</p>
+        <h3>${escapeHtml(contract.label)}</h3>
+      </div>
+      <span class="selection-pill">${escapeHtml(contract.corporation)}</span>
+    </div>
+    <dl class="selection-card__stats">
+      <div>
+        <dt>Objective</dt>
+        <dd>${escapeHtml(contract.objective)}</dd>
+      </div>
+      <div>
+        <dt>Risk</dt>
+        <dd>${escapeHtml(contract.risk)}</dd>
+      </div>
+    </dl>
+    <p class="selection-card__summary">${escapeHtml(contract.summary)}</p>
   </button>
 `
+
+const configOptionMarkup = (
+  option: AppBootstrap['shell']['configOptions'][number],
+): string => `
+  <button
+    class="selection-card"
+    data-config-id="${escapeHtml(option.id)}"
+    data-select-config
+    data-selected="${option.selected ? 'true' : 'false'}"
+    type="button"
+  >
+    <div class="selection-card__header">
+      <div>
+        <p class="eyebrow">Entry plan</p>
+        <h3>${escapeHtml(option.label)}</h3>
+      </div>
+      <span class="selection-pill">${option.selected ? 'Selected' : 'Preview'}</span>
+    </div>
+    <p class="selection-card__summary">${escapeHtml(option.summary)}</p>
+    <ul class="selection-card__effects">
+      ${option.effects.map((effect) => `<li>${escapeHtml(effect)}</li>`).join('')}
+    </ul>
+  </button>
+`
+
+const summaryCardMarkup = (
+  eyebrow: string,
+  title: string,
+  details: readonly [readonly [string, string], readonly [string, string]],
+  summary: string,
+): string => `
+  <article class="selection-card selection-card--static" data-selected="true">
+    <div class="selection-card__header">
+      <div>
+        <p class="eyebrow">${escapeHtml(eyebrow)}</p>
+        <h3>${escapeHtml(title)}</h3>
+      </div>
+    </div>
+    <dl class="selection-card__stats">
+      <div>
+        <dt>${escapeHtml(details[0][0])}</dt>
+        <dd>${escapeHtml(details[0][1])}</dd>
+      </div>
+      <div>
+        <dt>${escapeHtml(details[1][0])}</dt>
+        <dd>${escapeHtml(details[1][1])}</dd>
+      </div>
+    </dl>
+    <p class="selection-card__summary">${escapeHtml(summary)}</p>
+  </article>
+`
+
+const stageStepIndex = (stage: AppBootstrap['shell']['activeStage']): number =>
+  stage === 'lobby' ? 0 : stage === 'config' ? 1 : 2
+
+const stageStepMarkup = (
+  activeStage: AppBootstrap['shell']['activeStage'],
+  stepStage: AppBootstrap['shell']['activeStage'],
+  label: string,
+  number: number,
+): string => {
+  const activeIndex = stageStepIndex(activeStage)
+  const stepIndex = stageStepIndex(stepStage)
+  const state =
+    stepIndex < activeIndex ? 'complete' : stepIndex === activeIndex ? 'current' : 'upcoming'
+
+  return `
+    <li class="stage-step" data-state="${state}">
+      <span class="stage-step__index">${number}</span>
+      <span class="stage-step__label">${escapeHtml(label)}</span>
+    </li>
+  `
+}
 
 export const renderLayout = (
   container: HTMLElement,
   bootstrap: AppBootstrap,
   orderDraft: BrowserOrderDraft,
 ): LayoutHandle => {
+  const missionStage = bootstrap.shell.activeStage === 'mission'
+  const selectedContract = findSelectedContract(bootstrap)
+  const selectedConfig = findSelectedConfig(bootstrap)
   const followTargets = bootstrap.robots.filter((robot) => robot.id !== orderDraft.robotId)
+
+  const headerMetrics = missionStage
+    ? [
+        ['Mission clock', bootstrap.mission.missionClock],
+        ['Alarm', bootstrap.mission.alarmLevel],
+        ['Trace', `${bootstrap.mission.trace}%`],
+        ['Objective', bootstrap.mission.objectiveStatus],
+        ['Mission', bootstrap.mission.missionStatus],
+        ['Queued orders', String(bootstrap.mission.queuedOrders)],
+      ]
+    : [
+        ['Contract', selectedContract?.corporation ?? 'Unknown'],
+        ['Objective', selectedContract?.objective ?? 'Unknown'],
+        ['Entry plan', selectedConfig?.label ?? 'Pending'],
+        ['Clock', bootstrap.mission.missionClock],
+        ['Alarm', bootstrap.mission.alarmLevel],
+        ['Trace', `${bootstrap.mission.trace}%`],
+      ]
+
+  const boardStats = missionStage
+    ? [
+        ['Turn', String(bootstrap.mission.turn)],
+        ['Exposure', String(bootstrap.mission.exposure)],
+        ['Interrupts', String(bootstrap.mission.pendingInterrupts)],
+      ]
+    : [
+        ['Preview turn', String(bootstrap.mission.turn)],
+        ['Exposure', String(bootstrap.mission.exposure)],
+        ['Seeded orders', String(bootstrap.mission.queuedOrders)],
+      ]
+
+  const previewSummary = missionStage
+    ? bootstrap.debrief.summary
+    : bootstrap.shell.activeStage === 'lobby'
+      ? selectedContract?.summary ?? bootstrap.shell.stageSummary
+      : selectedConfig?.summary ?? bootstrap.shell.stageSummary
+
+  const previewItems = missionStage
+    ? bootstrap.debrief.keyEvents
+    : bootstrap.shell.activeStage === 'config'
+      ? (selectedConfig?.effects ?? [bootstrap.shell.stageSummary])
+      : [
+          selectedContract?.summary ?? 'Select a contract to inspect the deterministic operation package.',
+          selectedConfig === undefined
+            ? 'Open mission briefing to choose an entry plan before launch.'
+            : `Default entry plan: ${selectedConfig.label}. Open the mission briefing to tune it.`,
+        ]
+
+  const flowContent =
+    bootstrap.shell.activeStage === 'lobby'
+      ? `
+        <div class="selection-grid">
+          ${bootstrap.shell.contractOptions.map((contract) => contractOptionMarkup(contract)).join('')}
+        </div>
+      `
+      : bootstrap.shell.activeStage === 'config'
+        ? `
+          <p class="flow-copy">
+            Contract locked: ${escapeHtml(selectedContract?.label ?? 'Unknown operation')} · ${escapeHtml(selectedContract?.corporation ?? 'Unknown corporation')}
+          </p>
+          <div class="selection-grid">
+            ${bootstrap.shell.configOptions.map((option) => configOptionMarkup(option)).join('')}
+          </div>
+        `
+        : `
+          <p class="flow-copy">
+            Mission thread is live. Step back into briefing to replay the opener, or return to the lobby to choose a different contract package.
+          </p>
+          <div class="selection-grid selection-grid--summary">
+            ${summaryCardMarkup(
+              'Selected contract',
+              selectedContract?.label ?? 'Unknown operation',
+              [
+                ['Corporation', selectedContract?.corporation ?? 'Unknown'],
+                ['Risk', selectedContract?.risk ?? 'Unrated'],
+              ],
+              selectedContract?.summary ?? bootstrap.shell.stageSummary,
+            )}
+            ${summaryCardMarkup(
+              'Entry plan',
+              selectedConfig?.label ?? 'Pending plan',
+              [
+                ['Preview clock', bootstrap.mission.missionClock],
+                ['Trace', `${bootstrap.mission.trace}%`],
+              ],
+              selectedConfig?.summary ?? bootstrap.shell.stageSummary,
+            )}
+          </div>
+        `
 
   container.innerHTML = `
     <div class="shell">
@@ -130,30 +350,7 @@ export const renderLayout = (
           <p class="tagline">${escapeHtml(bootstrap.tagline)}</p>
         </div>
         <dl class="mission-meters">
-          <div>
-            <dt>Mission clock</dt>
-            <dd>${escapeHtml(bootstrap.mission.missionClock)}</dd>
-          </div>
-          <div>
-            <dt>Alarm</dt>
-            <dd>${escapeHtml(bootstrap.mission.alarmLevel)}</dd>
-          </div>
-          <div>
-            <dt>Trace</dt>
-            <dd>${bootstrap.mission.trace}%</dd>
-          </div>
-          <div>
-            <dt>Objective</dt>
-            <dd>${escapeHtml(bootstrap.mission.objectiveStatus)}</dd>
-          </div>
-          <div>
-            <dt>Mission</dt>
-            <dd>${escapeHtml(bootstrap.mission.missionStatus)}</dd>
-          </div>
-          <div>
-            <dt>Queued orders</dt>
-            <dd>${bootstrap.mission.queuedOrders}</dd>
-          </div>
+          ${headerMetrics.map(([label, value]) => headerMetricMarkup(label, value)).join('')}
         </dl>
       </header>
 
@@ -161,90 +358,120 @@ export const renderLayout = (
         <section class="board-panel panel">
           <div class="panel__header">
             <div>
-              <p class="eyebrow">Tactical board</p>
+              <p class="eyebrow">${missionStage ? 'Tactical board' : 'Operation preview'}</p>
               <h2>
                 ${escapeHtml(bootstrap.mission.corporation)}
                 ${escapeHtml(bootstrap.mission.siteLabel)}
               </h2>
             </div>
-            <p class="panel__summary">${escapeHtml(bootstrap.mission.objective)}</p>
+            <p class="panel__summary">${escapeHtml(bootstrap.shell.stageSummary)}</p>
           </div>
           <div class="board-host" data-board-host></div>
           <dl class="board-summary">
-            <div>
-              <dt>Turn</dt>
-              <dd>${bootstrap.mission.turn}</dd>
-            </div>
-            <div>
-              <dt>Exposure</dt>
-              <dd>${bootstrap.mission.exposure}</dd>
-            </div>
-            <div>
-              <dt>Interrupts</dt>
-              <dd>${bootstrap.mission.pendingInterrupts}</dd>
-            </div>
+            ${boardStats.map(([label, value]) => headerMetricMarkup(label, value)).join('')}
           </dl>
         </section>
 
         <aside class="sidebar">
+          <section class="panel">
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">Pre-mission flow</p>
+                <h2>${escapeHtml(bootstrap.shell.stageTitle)}</h2>
+              </div>
+              <p class="panel__summary">${escapeHtml(bootstrap.shell.stageSummary)}</p>
+            </div>
+            <div class="flow-panel__body">
+              <ol class="stage-track">
+                ${stageStepMarkup(bootstrap.shell.activeStage, 'lobby', 'Contract', 1)}
+                ${stageStepMarkup(bootstrap.shell.activeStage, 'config', 'Briefing', 2)}
+                ${stageStepMarkup(bootstrap.shell.activeStage, 'mission', 'Mission', 3)}
+              </ol>
+              ${flowContent}
+            </div>
+            <div class="selection-actions">
+              ${actionButtonMarkup(
+                'Open mission briefing',
+                'data-open-config',
+                false,
+                bootstrap.shell.activeStage !== 'lobby',
+              )}
+              ${actionButtonMarkup(
+                'Back to contract lobby',
+                'data-return-lobby',
+                false,
+                bootstrap.shell.activeStage === 'lobby',
+                'secondary',
+              )}
+              ${actionButtonMarkup(
+                'Launch mission shell',
+                'data-launch-mission',
+                false,
+                bootstrap.shell.activeStage !== 'config',
+              )}
+              ${actionButtonMarkup(
+                'Replay from mission briefing',
+                'data-return-config',
+                false,
+                bootstrap.shell.activeStage !== 'mission',
+                'secondary',
+              )}
+            </div>
+          </section>
+
           <section
-            class="panel panel--debrief"
-            data-terminal="${bootstrap.debrief.isTerminal ? 'true' : 'false'}"
-            data-tone="${escapeHtml(bootstrap.debrief.tone)}"
+            class="panel panel--debrief${missionStage ? '' : ' panel--preview'}"
+            data-terminal="${missionStage && bootstrap.debrief.isTerminal ? 'true' : 'false'}"
+            data-tone="${escapeHtml(missionStage ? bootstrap.debrief.tone : 'info')}"
           >
             <div class="panel__header">
               <div>
-                <p class="eyebrow">${bootstrap.debrief.isTerminal ? 'Mission debrief' : 'Mission outlook'}</p>
-                <h2>${escapeHtml(bootstrap.debrief.outcome)}</h2>
+                <p class="eyebrow">${missionStage ? (bootstrap.debrief.isTerminal ? 'Mission debrief' : 'Mission outlook') : 'Operation preview'}</p>
+                <h2>${escapeHtml(missionStage ? bootstrap.debrief.outcome : bootstrap.shell.stageTitle)}</h2>
               </div>
-              <span class="debrief-badge">${escapeHtml(bootstrap.mission.missionStatus)}</span>
+              <span class="debrief-badge">${escapeHtml(missionStage ? bootstrap.mission.missionStatus : selectedConfig?.label ?? 'Contract selected')}</span>
             </div>
             <div class="debrief">
-              <p class="debrief__summary">${escapeHtml(bootstrap.debrief.summary)}</p>
+              <p class="debrief__summary">${escapeHtml(previewSummary)}</p>
               <dl class="debrief__stats">
                 <div>
-                  <dt>Clock</dt>
-                  <dd>${escapeHtml(bootstrap.mission.missionClock)}</dd>
+                  <dt>${missionStage ? 'Clock' : 'Corporation'}</dt>
+                  <dd>${escapeHtml(missionStage ? bootstrap.mission.missionClock : selectedContract?.corporation ?? 'Unknown')}</dd>
                 </div>
                 <div>
-                  <dt>Trace</dt>
-                  <dd>${bootstrap.mission.trace}%</dd>
+                  <dt>${missionStage ? 'Trace' : 'Objective'}</dt>
+                  <dd>${escapeHtml(missionStage ? `${bootstrap.mission.trace}%` : selectedContract?.objective ?? 'Unknown')}</dd>
                 </div>
                 <div>
-                  <dt>Exposure</dt>
-                  <dd>${bootstrap.mission.exposure}</dd>
+                  <dt>${missionStage ? 'Exposure' : 'Risk'}</dt>
+                  <dd>${escapeHtml(missionStage ? String(bootstrap.mission.exposure) : selectedContract?.risk ?? 'Unrated')}</dd>
                 </div>
                 <div>
-                  <dt>Objective</dt>
-                  <dd>${escapeHtml(bootstrap.mission.objectiveStatus)}</dd>
+                  <dt>${missionStage ? 'Objective' : 'Entry plan'}</dt>
+                  <dd>${escapeHtml(missionStage ? bootstrap.mission.objectiveStatus : selectedConfig?.label ?? 'Pending')}</dd>
                 </div>
               </dl>
               <div class="debrief__events">
-                <p class="field__label">Key events</p>
+                <p class="field__label">${missionStage ? 'Key events' : bootstrap.shell.activeStage === 'config' ? 'Entry plan effects' : 'Operation notes'}</p>
                 ${
-                  bootstrap.debrief.keyEvents.length === 0
+                  previewItems.length === 0
                     ? '<p class="empty-state">No mission events are available yet.</p>'
-                    : `<ul class="debrief-event-list">${bootstrap.debrief.keyEvents
+                    : `<ul class="debrief-event-list">${previewItems
                         .map((message) => debriefEventMarkup(message))
                         .join('')}</ul>`
                 }
               </div>
-              <p class="debrief__next-step">${escapeHtml(bootstrap.debrief.nextStep)}</p>
-              <div class="save-transfer__actions">
-                <button class="action-button" data-replay-shell type="button">
-                  ${bootstrap.debrief.isTerminal
-                    ? 'Replay deterministic opening'
-                    : 'Reset from opening'}
-                </button>
-              </div>
+              <p class="debrief__next-step">${escapeHtml(
+                missionStage ? bootstrap.debrief.nextStep : bootstrap.controls.status,
+              )}</p>
             </div>
           </section>
 
           <section class="panel">
             <div class="panel__header">
               <div>
-                <p class="eyebrow">${bootstrap.debrief.isTerminal ? 'Mission reset' : 'Command uplink'}</p>
-                <h2>${bootstrap.debrief.isTerminal ? 'Replay controls' : 'Mission controls'}</h2>
+                <p class="eyebrow">${missionStage ? 'Command uplink' : 'Shell controls'}</p>
+                <h2>${missionStage ? 'Mission controls' : 'Reset and restore'}</h2>
               </div>
             </div>
             <div class="control-actions">
@@ -252,24 +479,28 @@ export const renderLayout = (
                 'Advance to next interrupt',
                 'data-advance-shell',
                 bootstrap.controls.canAdvance === false,
+                missionStage === false,
               )}
               ${actionButtonMarkup(
                 'Acknowledge interrupts',
                 'data-acknowledge-shell',
                 bootstrap.controls.canAcknowledge === false,
+                missionStage === false,
               )}
               ${actionButtonMarkup(
-                bootstrap.debrief.isTerminal ? 'Replay mission from opening' : 'Reset mission',
+                'Reset shell to default lobby',
                 'data-reset-shell',
                 bootstrap.controls.canReset === false,
+                false,
+                'secondary',
               )}
             </div>
-              <p class="action-status" data-action-status>
-                ${escapeHtml(bootstrap.controls.status)}
-              </p>
-            </section>
+            <p class="action-status" data-action-status>
+              ${escapeHtml(bootstrap.controls.status)}
+            </p>
+          </section>
 
-          <section class="panel">
+          <section class="panel"${missionStage ? '' : ' hidden'}>
             <div class="panel__header">
               <div>
                 <p class="eyebrow">High-level orders</p>
@@ -352,19 +583,17 @@ export const renderLayout = (
             </p>
           </section>
 
-          <section class="panel">
+          <section class="panel"${missionStage ? '' : ' hidden'}>
             <div class="panel__header">
               <div>
-                <p class="eyebrow">${bootstrap.debrief.isTerminal ? 'Mission closeout' : 'Interrupt queue'}</p>
-                <h2>${bootstrap.debrief.isTerminal ? 'Final signals' : 'Current blockers'}</h2>
+                <p class="eyebrow">Interrupt queue</p>
+                <h2>Current blockers</h2>
               </div>
             </div>
             <div class="panel__body">
               ${
                 bootstrap.interrupts.length === 0
-                  ? `<p class="empty-state">${bootstrap.debrief.isTerminal
-                      ? 'Mission closed without any unresolved interrupts.'
-                      : 'No interrupts are blocking the queue.'}</p>`
+                  ? '<p class="empty-state">No interrupts are blocking the queue.</p>'
                   : `<ul class="interrupt-list">${bootstrap.interrupts
                       .map((interrupt) => interruptMarkup(interrupt))
                       .join('')}</ul>`
@@ -415,8 +644,7 @@ export const renderLayout = (
             </div>
             <div class="save-transfer">
               <p class="save-transfer__hint">
-                The current autosave payload is mirrored here for manual backup or paste
-                restore.
+                The current autosave payload is mirrored here for manual backup or paste restore.
               </p>
               <label class="save-transfer__label" for="autosave-transfer-field">
                 Current deterministic payload
@@ -446,8 +674,8 @@ export const renderLayout = (
           <section class="panel">
             <div class="panel__header">
               <div>
-                <p class="eyebrow">Recent event log</p>
-                <h2>Mission feed</h2>
+                <p class="eyebrow">${missionStage ? 'Recent event log' : 'Operation log'}</p>
+                <h2>${missionStage ? 'Mission feed' : 'Briefing feed'}</h2>
               </div>
             </div>
             <div class="panel__body">
@@ -471,6 +699,9 @@ export const renderLayout = (
   const advanceButton = container.querySelector<HTMLButtonElement>('[data-advance-shell]')
   const autosaveButton = container.querySelector<HTMLButtonElement>('[data-copy-autosave]')
   const boardHost = container.querySelector<HTMLDivElement>('[data-board-host]')
+  const launchMissionButton =
+    container.querySelector<HTMLButtonElement>('[data-launch-mission]')
+  const openConfigButton = container.querySelector<HTMLButtonElement>('[data-open-config]')
   const orderFollowField = container.querySelector<HTMLDivElement>('[data-order-follow-field]')
   const orderForm = container.querySelector<HTMLFormElement>('[data-order-form]')
   const orderHint = container.querySelector<HTMLParagraphElement>('[data-order-hint]')
@@ -483,10 +714,13 @@ export const renderLayout = (
   const orderTargetField = container.querySelector<HTMLSelectElement>('[data-order-target]')
   const orderTypeField = container.querySelector<HTMLSelectElement>('[data-order-type]')
   const packetStatus = container.querySelector<HTMLParagraphElement>('[data-packet-status]')
-  const replayButton = container.querySelector<HTMLButtonElement>('[data-replay-shell]')
   const resetButton = container.querySelector<HTMLButtonElement>('[data-reset-shell]')
   const restoreAutosaveButton =
     container.querySelector<HTMLButtonElement>('[data-restore-autosave]')
+  const returnToConfigButton =
+    container.querySelector<HTMLButtonElement>('[data-return-config]')
+  const returnToLobbyButton =
+    container.querySelector<HTMLButtonElement>('[data-return-lobby]')
   const saveStatus = container.querySelector<HTMLParagraphElement>('[data-save-status]')
 
   if (
@@ -496,6 +730,8 @@ export const renderLayout = (
     advanceButton === null ||
     autosaveButton === null ||
     boardHost === null ||
+    launchMissionButton === null ||
+    openConfigButton === null ||
     orderFollowField === null ||
     orderForm === null ||
     orderHint === null ||
@@ -508,9 +744,10 @@ export const renderLayout = (
     orderTargetField === null ||
     orderTypeField === null ||
     packetStatus === null ||
-    replayButton === null ||
     resetButton === null ||
     restoreAutosaveButton === null ||
+    returnToConfigButton === null ||
+    returnToLobbyButton === null ||
     saveStatus === null
   ) {
     throw new Error('Failed to render the Remote Ops shell layout.')
@@ -523,6 +760,10 @@ export const renderLayout = (
     advanceButton,
     autosaveButton,
     boardHost,
+    configButtons: container.querySelectorAll<HTMLButtonElement>('[data-select-config]'),
+    contractButtons: container.querySelectorAll<HTMLButtonElement>('[data-select-contract]'),
+    launchMissionButton,
+    openConfigButton,
     orderFollowField,
     orderForm,
     orderHint,
@@ -536,9 +777,10 @@ export const renderLayout = (
     orderTypeField,
     packetButtons: container.querySelectorAll<HTMLButtonElement>('[data-packet-id]'),
     packetStatus,
-    replayButton,
     resetButton,
     restoreAutosaveButton,
+    returnToConfigButton,
+    returnToLobbyButton,
     saveStatus,
   }
 }

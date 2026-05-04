@@ -1,3 +1,5 @@
+λbriefingShell()=>µAppBootstrap=•gameApi.openMissionConfig(•gameApi.bootstrap().autosave)
+
 λdrainOrders(limit:Int,state:µGameState)=>µGameState match limit{
   0=>state|
   _=>match state.activeMission.interrupts{
@@ -48,6 +50,10 @@
   µBrowserHack("mira-1")
 ).autosave)
 
+λliveShell()=>µAppBootstrap=•gameApi.launchBrowserMission(briefingShell().autosave)
+
+λliveShellFromState(state:µGameState)=>µAppBootstrap=•gameApi.launchBrowserMission(•gameApi.autosavePayload(state))
+
 λloadShellState(shell:µAppBootstrap)=>µGameState=•gameApi.loadAutosaveState(shell.autosave)
 
 λmain()=>Unit=()
@@ -57,14 +63,14 @@
   state.activeMission.robots
 )
 
-λshellFromState(state:µGameState)=>µAppBootstrap=•gameApi.hydrateBrowserShell(•gameApi.autosavePayload(state))
-
 λstateWithMission(mission:µMissionState,state:µGameState)=>µGameState={
   activeMission:mission,
   campaign:state.campaign,
   eventLog:state.eventLog,
+  missionConfig:state.missionConfig,
   schemaVersion:state.schemaVersion,
   seed:state.seed,
+  shellStage:state.shellStage,
   turn:state.turn
 }
 
@@ -84,8 +90,10 @@
   },
   campaign:state.campaign,
   eventLog:state.eventLog,
+  missionConfig:state.missionConfig,
   schemaVersion:state.schemaVersion,
   seed:state.seed,
+  shellStage:state.shellStage,
   turn:state.turn
 }
 
@@ -143,18 +151,66 @@ test "bootstrap exposes canonical autosave payload" {
   }
 }
 
-test "bootstrap exposes playable browser controls" {
+test "bootstrap opens in the contract lobby" {
   l shell=(•gameApi.bootstrap():µAppBootstrap);
-  shell.controls.canAdvance
+  shell.shell.activeStage="lobby"
+    and shell.shell.stageTitle="Operation lobby"
+    and shell.controls.canAdvance=false
     and shell.controls.canAcknowledge=false
-    and shell.controls.canQueueOrders
+    and shell.controls.canQueueOrders=false
     and shell.mission.missionStatus="In progress"
     and shell.mission.queuedOrders=4
     and shell.mission.pendingInterrupts=0
+    and shell.shell.selectedContractId="helixgrid-battery-recovery"
+    and #shell.shell.contractOptions=3
+}
+
+test "browser shell stages contract selection briefing and mission launch" {
+  l morrow=(•gameApi.selectBrowserContract(
+    •gameApi.bootstrap().autosave,
+    "morrow-audit-lift"
+  ):µAppBootstrap);
+  l config=(•gameApi.openMissionConfig(morrow.autosave):µAppBootstrap);
+  l dockBreach=(•gameApi.setBrowserEntryPlan(
+    config.autosave,
+    "dock-breach"
+  ):µAppBootstrap);
+  l live=(•gameApi.launchBrowserMission(dockBreach.autosave):µAppBootstrap);
+  morrow.shell.activeStage="lobby"
+    and morrow.shell.selectedContractId="morrow-audit-lift"
+    and morrow.mission.corporation="Morrow Dynamics"
+    and config.shell.activeStage="config"
+    and dockBreach.shell.selectedConfigId="dock-breach"
+    and dockBreach.mission.trace=53
+    and live.shell.activeStage="mission"
+    and live.controls.canAdvance
+    and live.controls.canQueueOrders
+}
+
+test "return and restore helpers preserve staged flow" {
+  l briefing=(•gameApi.returnToMissionConfig(•gameApi.advanceBrowserShell(•gameApi.launchBrowserMission(•gameApi.setBrowserEntryPlan(
+    •gameApi.openMissionConfig(•gameApi.selectBrowserContract(
+      •gameApi.bootstrap().autosave,
+      "nightglass-dawn-snatch"
+    ).autosave).autosave,
+    "duct-insertion"
+  ).autosave).autosave).autosave):µAppBootstrap);
+  l lobby=(•gameApi.returnToContractLobby(briefing.autosave):µAppBootstrap);
+  l restored=(•gameApi.hydrateBrowserShell(briefing.autosave):µAppBootstrap);
+  briefing.shell.activeStage="config"
+    and briefing.shell.selectedContractId="nightglass-dawn-snatch"
+    and briefing.shell.selectedConfigId="duct-insertion"
+    and briefing.mission.pendingInterrupts=0
+    and briefing.mission.objectiveStatus="Unlocated"
+    and lobby.shell.activeStage="lobby"
+    and lobby.shell.selectedContractId="nightglass-dawn-snatch"
+    and restored.shell=briefing.shell
+    and restored.mission=briefing.mission
+    and restored.eventLog=briefing.eventLog
 }
 
 test "advanceBrowserShell stops at the next interrupt" {
-  l shell=(•gameApi.advanceBrowserShell(•gameApi.bootstrap().autosave):µAppBootstrap);
+  l shell=(•gameApi.advanceBrowserShell(liveShell().autosave):µAppBootstrap);
   shell.mission.missionClock="07:43"
     and shell.mission.objectiveStatus="Located"
     and shell.mission.queuedOrders=3
@@ -170,7 +226,7 @@ test "advanceBrowserShell stops at the next interrupt" {
 }
 
 test "hydrateBrowserShell restores a progressed autosave" {
-  l advanced=(•gameApi.advanceBrowserShell(•gameApi.bootstrap().autosave):µAppBootstrap);
+  l advanced=(•gameApi.advanceBrowserShell(liveShell().autosave):µAppBootstrap);
   l hydrated=(•gameApi.hydrateBrowserShell(advanced.autosave):µAppBootstrap);
   hydrated.mission=advanced.mission
     and hydrated.interrupts=advanced.interrupts
@@ -178,7 +234,7 @@ test "hydrateBrowserShell restores a progressed autosave" {
 }
 
 test "acknowledgeBrowserShell clears interrupts so play can continue" {
-  l cleared=(•gameApi.acknowledgeBrowserShell(•gameApi.advanceBrowserShell(•gameApi.bootstrap().autosave).autosave):µAppBootstrap);
+  l cleared=(•gameApi.acknowledgeBrowserShell(•gameApi.advanceBrowserShell(liveShell().autosave).autosave):µAppBootstrap);
   #cleared.interrupts=0
     and cleared.controls.canAcknowledge=false
     and cleared.controls.canAdvance
@@ -188,7 +244,7 @@ test "acknowledgeBrowserShell clears interrupts so play can continue" {
 }
 
 test "draining the seeded queue exposes queue-more browser controls" {
-  l shell=(shellFromState(drainOrders(
+  l shell=(liveShellFromState(drainOrders(
     16,
     •gameState.initialGameState()
   )):µAppBootstrap);
@@ -203,7 +259,7 @@ test "draining the seeded queue exposes queue-more browser controls" {
 
 test "queueBrowserOrder appends move and relay orders into the autosave shell" {
   l queuedMove=(•gameApi.queueBrowserOrder(
-    shellFromState(drainOrders(
+    liveShellFromState(drainOrders(
       16,
       •gameState.initialGameState()
     )).autosave,
@@ -265,7 +321,7 @@ test "queueBrowserOrder appends move and relay orders into the autosave shell" {
 
 test "queueBrowserOrder supports scan interact and extract workflows" {
   l queuedScan=(•gameApi.queueBrowserOrder(
-    shellFromState(stateWithoutOrders(•gameState.initialGameState())).autosave,
+    liveShellFromState(stateWithoutOrders(•gameState.initialGameState())).autosave,
     µBrowserScan("gecko-1")
   ):µAppBootstrap);
   l afterScan=(•gameApi.advanceBrowserShell(queuedScan.autosave):µAppBootstrap);
@@ -303,7 +359,7 @@ test "queueBrowserOrder supports scan interact and extract workflows" {
 test "repeated hacks trigger deterministic mission failure debrief" {
   l afterFive=(hackCycles(
     5,
-    shellFromState(stateWithoutOrders(•gameState.initialGameState()))
+    liveShellFromState(stateWithoutOrders(•gameState.initialGameState()))
   ):µAppBootstrap);
   l afterSix=(hackRound(afterFive):µAppBootstrap);
   afterFive.debrief.isTerminal=false
@@ -326,13 +382,13 @@ test "repeated hacks trigger deterministic mission failure debrief" {
 }
 
 test "queueBrowserOrder rejects invalid browser commands deterministically" {
-  l interrupted=(•gameApi.advanceBrowserShell(•gameApi.bootstrap().autosave):µAppBootstrap);
+  l interrupted=(•gameApi.advanceBrowserShell(liveShell().autosave):µAppBootstrap);
   l rejectedWhileInterrupted=(•gameApi.queueBrowserOrder(
     interrupted.autosave,
     µBrowserHold("mira-1")
   ):µAppBootstrap);
   l rejectedMove=(•gameApi.queueBrowserOrder(
-    shellFromState(stateWithoutOrders(•gameState.initialGameState())).autosave,
+    liveShellFromState(stateWithoutOrders(•gameState.initialGameState())).autosave,
     µBrowserMove(
       "mira-1",
       {
@@ -472,4 +528,14 @@ test "browser order helpers cover missing targets and operator validation" {
 
 test "resetBrowserShell returns to the initial deterministic mission" {
   •gameApi.resetBrowserShell()=•gameApi.bootstrap()
+}
+
+test "findAvailableContract returns None for unknown ids" {
+  match •gameApi.findAvailableContract(
+    "ghost-contract",
+    •gameState.initialGameState()
+  ){
+    Some(_)=>false|
+    None()=>true
+  }
 }
