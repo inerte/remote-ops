@@ -20,3 +20,48 @@ test "bootstrap exposes canonical autosave payload" {
     Err(_)=>false
   }
 }
+
+test "bootstrap exposes playable browser controls" {
+  l shell=(•gameApi.bootstrap():µAppBootstrap);
+  shell.controls.canAdvance
+    and shell.controls.canAcknowledge=false
+    and shell.mission.missionStatus="In progress"
+    and shell.mission.queuedOrders=4
+    and shell.mission.pendingInterrupts=0
+}
+
+test "advanceBrowserShell stops at the next interrupt" {
+  l shell=(•gameApi.advanceBrowserShell(•gameApi.bootstrap().autosave):µAppBootstrap);
+  shell.mission.missionClock="07:43"
+    and shell.mission.objectiveStatus="Located"
+    and shell.mission.queuedOrders=3
+    and shell.mission.pendingInterrupts=1
+    and #shell.eventLog=3
+    and shell.controls.canAcknowledge
+    and shell.controls.canAdvance=false
+    and (match shell.interrupts{
+      ["objective_found prototype-battery"]=>true|
+      _=>false
+    })
+}
+
+test "hydrateBrowserShell restores a progressed autosave" {
+  l advanced=(•gameApi.advanceBrowserShell(•gameApi.bootstrap().autosave):µAppBootstrap);
+  l hydrated=(•gameApi.hydrateBrowserShell(advanced.autosave):µAppBootstrap);
+  hydrated.mission=advanced.mission
+    and hydrated.interrupts=advanced.interrupts
+    and hydrated.eventLog=advanced.eventLog
+}
+
+test "acknowledgeBrowserShell clears interrupts so play can continue" {
+  l cleared=(•gameApi.acknowledgeBrowserShell(•gameApi.advanceBrowserShell(•gameApi.bootstrap().autosave).autosave):µAppBootstrap);
+  #cleared.interrupts=0
+    and cleared.controls.canAcknowledge=false
+    and cleared.controls.canAdvance
+    and cleared.mission.pendingInterrupts=0
+    and cleared.mission.queuedOrders=3
+}
+
+test "resetBrowserShell returns to the initial deterministic mission" {
+  •gameApi.resetBrowserShell()=•gameApi.bootstrap()
+}

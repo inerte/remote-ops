@@ -53,7 +53,7 @@ button {
 
 .shell__header,
 .shell__content {
-  width: min(1400px, 100%);
+  width: min(1440px, 100%);
   margin: 0 auto;
 }
 
@@ -66,7 +66,7 @@ button {
 
 .shell__content {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(340px, 420px);
+  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 440px);
   gap: 24px;
   flex: 1;
 }
@@ -74,6 +74,7 @@ button {
 .sidebar {
   display: grid;
   gap: 24px;
+  align-content: start;
 }
 
 .panel {
@@ -88,6 +89,10 @@ button {
   display: grid;
   gap: 8px;
   padding: 20px 20px 0;
+}
+
+.panel__body {
+  padding: 20px;
 }
 
 .panel__summary {
@@ -112,7 +117,8 @@ p,
 dl,
 dd,
 dt,
-ol {
+ol,
+ul {
   margin: 0;
 }
 
@@ -139,9 +145,9 @@ h3 {
 
 .mission-meters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 12px;
-  width: min(420px, 100%);
+  width: min(680px, 100%);
 }
 
 .mission-meters div {
@@ -151,14 +157,17 @@ h3 {
   border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
-.mission-meters dt {
+.mission-meters dt,
+.board-summary dt,
+.robot-card__stats dt {
   color: #8ba4d0;
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.mission-meters dd {
+.mission-meters dd,
+.board-summary dd {
   margin-top: 8px;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 1rem;
@@ -175,15 +184,139 @@ h3 {
   padding: 16px;
 }
 
+.board-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.board-summary div {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(125, 211, 252, 0.12);
+}
+
+.control-actions,
 .robot-list,
-.packet-list,
-.next-steps {
+.packet-list {
   padding: 20px;
 }
 
-.robot-list {
+.control-actions,
+.robot-list,
+.packet-list {
   display: grid;
-  gap: 14px;
+  gap: 12px;
+}
+
+.action-button,
+.packet-button {
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 12px;
+  color: #e0f2fe;
+  padding: 12px 14px;
+  text-align: left;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease,
+    opacity 120ms ease;
+}
+
+.action-button {
+  background: rgba(14, 165, 233, 0.18);
+}
+
+.packet-button {
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.action-button:hover:not(:disabled),
+.action-button:focus-visible:not(:disabled),
+.packet-button:hover,
+.packet-button:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.56);
+  background: rgba(14, 165, 233, 0.24);
+}
+
+.action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+  transform: none;
+}
+
+.action-status,
+.packet-status {
+  padding: 0 20px 20px;
+  color: #8ba4d0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.packet-meta {
+  padding: 0 20px 12px;
+  color: #8ba4d0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.action-status[data-state='error'],
+.packet-status[data-state='error'] {
+  color: #fca5a5;
+}
+
+.action-status[data-state='success'],
+.packet-status[data-state='success'] {
+  color: #86efac;
+}
+
+.empty-state {
+  color: #8ba4d0;
+  font-size: 0.92rem;
+}
+
+.interrupt-list,
+.event-list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.interrupt-list,
+.event-list {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.interrupt-entry,
+.event-entry {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.interrupt-entry {
+  color: #d8e4ff;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.88rem;
+}
+
+.event-entry {
+  display: grid;
+  gap: 8px;
+}
+
+.event-entry__turn {
+  color: #7dd3fc;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .robot-card {
@@ -227,77 +360,13 @@ h3 {
   gap: 4px;
 }
 
-.robot-card__stats dt {
-  color: #8ba4d0;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
 .robot-card__stats dd {
   color: #f8fbff;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 0.92rem;
 }
 
-.packet-list {
-  display: grid;
-  gap: 12px;
-}
-
-.packet-button {
-  border: 1px solid rgba(125, 211, 252, 0.28);
-  border-radius: 12px;
-  background: rgba(14, 165, 233, 0.12);
-  color: #e0f2fe;
-  padding: 12px 14px;
-  text-align: left;
-  transition:
-    transform 120ms ease,
-    border-color 120ms ease,
-    background 120ms ease;
-}
-
-.packet-button:hover,
-.packet-button:focus-visible {
-  transform: translateY(-1px);
-  border-color: rgba(125, 211, 252, 0.56);
-  background: rgba(14, 165, 233, 0.18);
-}
-
-.packet-status {
-  padding: 0 20px 20px;
-  color: #8ba4d0;
-  font-size: 0.92rem;
-}
-
-.packet-meta {
-  padding: 0 20px 12px;
-  color: #8ba4d0;
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
-.packet-status[data-state='error'] {
-  color: #fca5a5;
-}
-
-.packet-status[data-state='success'] {
-  color: #86efac;
-}
-
-.next-steps {
-  padding-left: 38px;
-  display: grid;
-  gap: 12px;
-  color: #d8e4ff;
-}
-
-.next-steps li {
-  padding-left: 4px;
-}
-
-@media (max-width: 1120px) {
+@media (max-width: 1180px) {
   .shell__header,
   .shell__content {
     width: 100%;
@@ -305,8 +374,8 @@ h3 {
 
   .shell__header,
   .shell__content {
-    grid-template-columns: 1fr;
     display: grid;
+    grid-template-columns: 1fr;
   }
 
   .mission-meters {
@@ -319,11 +388,12 @@ h3 {
     padding: 16px;
   }
 
-  .mission-meters {
-    grid-template-columns: 1fr;
-  }
-
   .board-host {
     min-height: 420px;
+  }
+
+  .board-summary,
+  .mission-meters {
+    grid-template-columns: 1fr;
   }
 }

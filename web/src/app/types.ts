@@ -8,12 +8,31 @@ export interface BoardSummary {
   readonly width: number
 }
 
+export interface ControlSummary {
+  readonly canAcknowledge: boolean
+  readonly canAdvance: boolean
+  readonly canReset: boolean
+  readonly status: string
+}
+
+export interface EventEntry {
+  readonly message: string
+  readonly turn: number
+}
+
 export interface MissionSummary {
   readonly alarmLevel: string
   readonly corporation: string
+  readonly exposure: number
   readonly missionClock: string
+  readonly missionStatus: string
   readonly objective: string
+  readonly objectiveStatus: string
+  readonly pendingInterrupts: number
+  readonly queuedOrders: number
+  readonly siteLabel: string
   readonly trace: number
+  readonly turn: number
 }
 
 export interface RobotSummary {
@@ -35,8 +54,10 @@ export interface PacketSummary {
 export interface AppBootstrap {
   readonly autosave: string
   readonly board: BoardSummary
+  readonly controls: ControlSummary
+  readonly eventLog: readonly EventEntry[]
+  readonly interrupts: readonly string[]
   readonly mission: MissionSummary
-  readonly nextSteps: readonly string[]
   readonly packets: readonly PacketSummary[]
   readonly robots: readonly RobotSummary[]
   readonly tagline: string

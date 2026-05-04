@@ -86,7 +86,7 @@ export const createBoard = async (
   }
 
   const legend = new Text({
-    text: 'BOOTSTRAP BOARD · SIGIL DATA PREVIEW',
+    text: 'SIGIL STATE · LIVE BOARD PREVIEW',
     style: {
       fill: '#7dd3fc',
       fontFamily: 'IBM Plex Mono, ui-monospace, monospace',

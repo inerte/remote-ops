@@ -1,3 +1,20 @@
+λacknowledgeBrowserShell(autosave:String)=>µAppBootstrap=browserShell(acknowledgePendingInterrupts(loadAutosaveState(autosave)))
+
+λacknowledgePendingInterrupts(state:µGameState)=>µGameState match state.activeMission.interrupts{
+  []=>state|
+  _=>•simulation.acknowledgeInterrupts(state)
+}
+
+λadvanceBrowserShell(autosave:String)=>µAppBootstrap=browserShell(advanceToCheckpoint(loadAutosaveState(autosave)))
+
+λadvanceToCheckpoint(state:µGameState)=>µGameState match state.activeMission.interrupts{
+  []=>•simulation.resumeUntilInterrupt(
+    browserAdvanceLimit(),
+    state
+  )|
+  _=>state
+}
+
 λalarmLevelDisplay(alarm:µAlarmLevel)=>String=alarmLevelName(alarm)
   ++" "
   ++alarmLevelTier(alarm)
@@ -35,18 +52,52 @@
   width:state.activeMission.facility.width
 }
 
-λbootstrap()=>µAppBootstrap={
-  autosave:autosavePayload(bootstrapState()),
-  board:boardSummary(bootstrapState()),
-  mission:missionSummary(bootstrapState()),
-  nextSteps:nextSteps(),
-  packets:•packetGenerator.generatePackets(bootstrapState()),
-  robots:robotSummaries(bootstrapState().activeMission.robots),
+λbootstrap()=>µAppBootstrap=browserShell(bootstrapState())
+
+λbootstrapState()=>µGameState=•gameState.initialGameState()
+
+λbrowserAdvanceLimit()=>Int=32
+
+λbrowserControls(state:µGameState)=>µControlSummary={
+  canAcknowledge:hasPendingInterrupts(state),
+  canAdvance:canAdvanceSimulation(state),
+  canReset:true,
+  status:controlStatus(state)
+}
+
+λbrowserShell(state:µGameState)=>µAppBootstrap={
+  autosave:autosavePayload(state),
+  board:boardSummary(state),
+  controls:browserControls(state),
+  eventLog:state.eventLog,
+  interrupts:interruptsForShell(state.activeMission.interrupts),
+  mission:missionSummary(state),
+  packets:•packetGenerator.generatePackets(state),
+  robots:robotSummaries(state.activeMission.robots),
   tagline:"Illegal operators, disposable hardware, and no punishment for thinking.",
   title:"Remote Ops"
 }
 
-λbootstrapState()=>µGameState=•gameState.initialGameState()
+λcanAdvanceSimulation(state:µGameState)=>Bool match hasPendingInterrupts(state){
+  true=>false|
+  false=>match hasQueuedOrders(state){
+    true=>missionIsInProgress(state.activeMission.status)|
+    false=>false
+  }
+}
+
+λcontrolStatus(state:µGameState)=>String match state.activeMission.status{
+  µMissionAborted()=>"Mission aborted. Reset the mission to replay the deterministic opening."|
+  µMissionExtracted()=>"Objective extracted. Reset the mission to replay the deterministic opening."|
+  µMissionFailed(reason)=>"Mission failed: "++reason|
+  µMissionInProgress()=>match hasPendingInterrupts(state){
+    true=>"Interrupts are waiting. Acknowledge them before advancing the simulation."|
+    false=>match hasQueuedOrders(state){
+      true=>"Advance the deterministic simulation until the next interrupt or status change."|
+      false=>"No queued orders remain in this milestone build. Reset the mission to replay the opener."
+    }
+  }
+}
 
 λcorporationDisplayName(corporationId:µCorporationId)=>String match corporationId{
   µCorporationId("helixgrid")=>"HelixGrid"|
@@ -66,25 +117,68 @@
   None()=>false
 }
 
+λhasPendingInterrupts(state:µGameState)=>Bool match state.activeMission.interrupts{
+  []=>false|
+  _=>true
+}
+
+λhasQueuedOrders(state:µGameState)=>Bool match state.activeMission.orders{
+  []=>false|
+  _=>true
+}
+
+λhydrateBrowserShell(autosave:String)=>µAppBootstrap=browserShell(loadAutosaveState(autosave))
+
+λinterruptsForShell(interrupts:[µInterrupt])=>[String]=interrupts map (λ(interrupt:µInterrupt)=>String=•packetGenerator.interruptLabel(interrupt))
+
+λloadAutosaveState(autosave:String)=>µGameState match •saveCodecs.parseSaveFile(autosave){
+  Ok(saveFile)=>•saveApi.loadGameState(saveFile)|
+  Err(_)=>bootstrapState()
+}
+
 λmissionClockLabel(clock:Int)=>String="07:"++twoDigit(clock)
+
+λmissionIsInProgress(status:µMissionStatus)=>Bool match status{
+  µMissionInProgress()=>true|
+  _=>false
+}
+
+λmissionStatusDisplay(status:µMissionStatus)=>String match status{
+  µMissionAborted()=>"Aborted"|
+  µMissionExtracted()=>"Extracted"|
+  µMissionFailed(reason)=>"Failed: "++reason|
+  µMissionInProgress()=>"In progress"
+}
 
 λmissionSummary(state:µGameState)=>µMissionSummary={
   alarmLevel:alarmLevelDisplay(state.activeMission.alarmLevel),
   corporation:corporationDisplayName(state.activeMission.contract.corporation),
+  exposure:state.activeMission.exposure,
   missionClock:missionClockLabel(state.activeMission.missionClock),
+  missionStatus:missionStatusDisplay(state.activeMission.status),
   objective:objectiveSummary(state.activeMission),
-  trace:state.activeMission.trace
+  objectiveStatus:objectiveStatusDisplay(state.activeMission.objective),
+  pendingInterrupts:#state.activeMission.interrupts,
+  queuedOrders:#state.activeMission.orders,
+  siteLabel:objectiveSiteLabel(state.activeMission.facility.rooms),
+  trace:state.activeMission.trace,
+  turn:state.turn
 }
-
-λnextSteps()=>[String]=[
-  "Promote bootstrap autosave writes into world-action checkpoints.",
-  "Add manual save import once the browser shell can mutate deterministic state.",
-  "Start gameplay controls in the later browser-shell milestone, not in this pass."
-]
 
 λobjectiveSiteLabel(rooms:[µRoomState])=>String match hasLabRoom(rooms){
   true=>"cold-storage lab"|
   false=>"facility"
+}
+
+λobjectiveStatusDisplay(objective:µObjectiveState)=>String match objective.extracted{
+  true=>"Extracted"|
+  false=>match objective.securedBy{
+    Some(robotId)=>robotIdDisplay(robotId)++" secured the package"|
+    None()=>match objective.located{
+      true=>"Located"|
+      false=>"Unlocated"
+    }
+  }
 }
 
 λobjectiveSummary(mission:µMissionState)=>String=mission.contract.label
@@ -93,6 +187,8 @@
   ++"."
 
 λpacketCount()=>Int=•packetGenerator.packetCount(bootstrapState())
+
+λresetBrowserShell()=>µAppBootstrap=browserShell(bootstrapState())
 
 λrobotArchetypeDisplay(archetype:µRobotArchetype)=>String match archetype{
   µAtlasBreacher()=>"Atlas Breacher"|

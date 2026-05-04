@@ -3,8 +3,10 @@ t AlarmLevel=AlarmCounterOperatorTrace()|AlarmLocal()|AlarmLockdown()|AlarmNorma
 t AppBootstrap={
   autosave:String,
   board:BoardSummary,
+  controls:ControlSummary,
+  eventLog:[EventEntry],
+  interrupts:[String],
   mission:MissionSummary,
-  nextSteps:[String],
   packets:[PacketSummary],
   robots:[RobotSummary],
   tagline:String,
@@ -30,6 +32,13 @@ t ContractSummary={
   corporation:CorporationId,
   label:String,
   objective:ObjectiveKind
+}
+
+t ControlSummary={
+  canAcknowledge:Bool,
+  canAdvance:Bool,
+  canReset:Bool,
+  status:String
 }
 
 t CorporationId=CorporationId(String)
@@ -97,9 +106,16 @@ t InventoryItem={
 t MissionSummary={
   alarmLevel:String,
   corporation:String,
+  exposure:Int,
   missionClock:String,
+  missionStatus:String,
   objective:String,
-  trace:Int
+  objectiveStatus:String,
+  pendingInterrupts:Int,
+  queuedOrders:Int,
+  siteLabel:String,
+  trace:Int,
+  turn:Int
 }
 
 t MissionId=MissionId(String)
