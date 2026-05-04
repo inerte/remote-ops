@@ -1,0 +1,99 @@
+λmain()=>Unit=()
+
+λsampleReplaySteps()=>[µReplayStep]=[
+  {
+    action:µReplayQueueOrder(
+      µRobotId("atlas-1"),
+      µMoveTo({
+        x:0,
+        y:4
+      })
+    ),
+    turn:1
+  },
+  {
+    action:µReplayAcknowledgeInterrupts(),
+    turn:2
+  }
+]
+
+λsampleSaveFile()=>µSaveFile=•saveApi.createSaveFile(
+  "prototype",
+  "2026-05-04T16:00:00Z",
+  •gameState.initialGameState()
+)
+
+test "stringifySaveFile emits canonical save payload fields" {
+  l text=(•saveCodecs.stringifySaveFile(sampleSaveFile()):String);
+  §string.contains(
+    text,
+    "\"schemaVersion\":1"
+  )
+    and §string.contains(
+      text,
+      "\"gameVersion\":\"prototype\""
+    )
+    and §string.contains(
+      text,
+      "\"savedAt\":\"2026-05-04T16:00:00Z\""
+    )
+    and §string.contains(
+      text,
+      "\"state\":{"
+    )
+}
+
+test "parseSaveFile roundtrips the initial game state" {
+  l save=(sampleSaveFile():µSaveFile);
+  match •saveCodecs.parseSaveFile(•saveCodecs.stringifySaveFile(save)){
+    Ok(parsed)=>parsed=save and •saveApi.loadGameState(parsed)=save.state|
+    Err(_)=>false
+  }
+}
+
+test "parseSaveFile rejects a missing savedAt field" {
+  match •saveCodecs.parseSaveFile(§string.replaceAll(
+    •saveCodecs.stringifySaveFile(sampleSaveFile()),
+    "\"savedAt\":\"2026-05-04T16:00:00Z\",",
+    ""
+  )){
+    Ok(_)=>false|
+    Err(_)=>true
+  }
+}
+
+test "replay log roundtrips deterministic steps" {
+  l replay=(•saveApi.createReplayLog(
+    •gameState.initialGameState(),
+    sampleReplaySteps()
+  ):µReplayLog);
+  match •saveCodecs.parseReplayLog(•saveCodecs.stringifyReplayLog(replay)){
+    Ok(parsed)=>parsed=replay
+      and parsed.contractId=µContractId("helixgrid-battery-recovery")
+      and parsed.initialSeed=1337|
+    Err(_)=>false
+  }
+}
+
+test "stringifyReplayLog records queue order actions" {
+  l text=(•saveCodecs.stringifyReplayLog(•saveApi.createReplayLog(
+    •gameState.initialGameState(),
+    sampleReplaySteps()
+  )):String);
+  §string.contains(
+    text,
+    "\"schemaVersion\":1"
+  )
+    and §string.contains(
+      text,
+      "\"contractId\":\"helixgrid-battery-recovery\""
+    )
+    and §string.contains(
+      text,
+      "\"tag\":\"ReplayQueueOrder\""
+    )
+    and §string.contains(
+      text,
+      "\"tag\":\"MoveTo\""
+    )
+}

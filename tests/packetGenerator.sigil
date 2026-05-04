@@ -1,0 +1,174 @@
+λfindPacket(packetId:String,state:µGameState)=>Option[µPacketSummary]=§list.find(
+  λ(packet:µPacketSummary)=>Bool=packet.id=packetId,
+  •packetGenerator.generatePackets(state)
+)
+
+λmain()=>Unit=()
+
+λpacketBody(packetId:String,state:µGameState)=>String match findPacket(
+  packetId,
+  state
+){
+  Some(packet)=>packet.body|
+  None()=>"missing packet"
+}
+
+λpacketLabel(packetId:String,state:µGameState)=>String match findPacket(
+  packetId,
+  state
+){
+  Some(packet)=>packet.label|
+  None()=>"missing packet"
+}
+
+λwithFacilitySeed(seed:Int,state:µGameState)=>µGameState={
+  activeMission:{
+    alarmLevel:state.activeMission.alarmLevel,
+    contract:state.activeMission.contract,
+    exposure:state.activeMission.exposure,
+    facility:•facilityGenerator.generateFacilityState(seed),
+    interrupts:state.activeMission.interrupts,
+    missionClock:state.activeMission.missionClock,
+    objective:state.activeMission.objective,
+    orders:state.activeMission.orders,
+    robots:state.activeMission.robots,
+    status:state.activeMission.status,
+    trace:state.activeMission.trace
+  },
+  campaign:state.campaign,
+  eventLog:state.eventLog,
+  schemaVersion:state.schemaVersion,
+  seed:seed,
+  turn:state.turn
+}
+
+test "generatePackets emits four named packets" {
+  l state=(•gameState.initialGameState():µGameState);
+  •packetGenerator.packetCount(state)=4
+    and packetLabel(
+      "mission-brief",
+      state
+    )="Mission Brief"
+    and packetLabel(
+      "tactical-snapshot",
+      state
+    )="Tactical Snapshot"
+    and packetLabel(
+      "recent-event-log",
+      state
+    )="Recent Event Log"
+    and packetLabel(
+      "telemetry",
+      state
+    )="Telemetry"
+}
+
+test "mission brief reflects the current mission state" {
+  packetBody(
+    "mission-brief",
+    •gameState.initialGameState()
+  )="MISSION BRIEF
+
+packet_type: mission_brief
+turn: 1
+seed: 1337
+corporation_id: helixgrid
+contract_id: helixgrid-battery-recovery
+contract_label: Recover the prototype cryocell battery
+objective_id: prototype-battery
+objective_kind: steal_prototype_battery
+objective_status: unlocated
+mission_status: in_progress
+mission_clock_tick: 42
+alarm_level: suspicion
+trace_percent: 41
+exposure: 12
+facility_rooms: 7
+security_entities: 3"
+}
+
+test "tactical snapshot updates after simulation progress" {
+  packetBody(
+    "tactical-snapshot",
+    •simulation.advanceOneOrder(•gameState.initialGameState())
+  )="TACTICAL SNAPSHOT
+
+packet_type: tactical_snapshot
+objective_located: true
+objective_secured_by: none
+objective_extracted: false
+queued_orders: 3
+pending_interrupts: 1
+robots:
+- id: gecko-1 | name: Gecko | archetype: gecko_microcrawler | location: Duct junction E2 | position: 4,1 | battery: 54 | signal: degraded (58) | payload: 0 | next_order: none
+- id: mira-1 | name: Mira | archetype: mira_service_android | location: Service corridor C4 | position: 2,3 | battery: 81 | signal: stable (86) | payload: 0 | next_order: hold | queued
+- id: atlas-1 | name: Atlas | archetype: atlas_breacher | location: Loading dock A6 | position: 0,5 | battery: 100 | signal: relay_online (92) | payload: 1 | next_order: move_to 0,5 | queued
+- id: wisp-1 | name: Wisp | archetype: wisp_relay_drone | location: Relay point B2 | position: 1,1 | battery: 67 | signal: steady (73) | payload: 0 | next_order: return_to_relay | queued
+
+interrupt_queue:
+- objective_found prototype-battery"
+}
+
+test "recent event log appends simulated events" {
+  packetBody(
+    "recent-event-log",
+    •simulation.advanceOneOrder(•gameState.initialGameState())
+  )="RECENT EVENT LOG
+
+packet_type: recent_event_log
+event_count: 3
+events:
+- turn: 0 | message: Mission package assembled for HelixGrid battery recovery.
+- turn: 1 | message: Relay network seeded and remote units staged.
+- turn: 2 | message: Gecko completed a fiber sweep and located the prototype battery."
+}
+
+test "telemetry follows the facility state" {
+  packetBody(
+    "telemetry",
+    withFacilitySeed(
+      1338,
+      •gameState.initialGameState()
+    )
+  )="TELEMETRY
+
+packet_type: telemetry
+seed: 1338
+turn: 1
+board_size: 10x7
+room_count: 7
+security_count: 3
+robot_count: 4
+queued_orders: 4
+payload_units: 1
+total_battery: 302
+lowest_battery_robot: gecko-1 | 54
+lowest_signal_robot: gecko-1 | 58
+rooms:
+- Front lobby | kind: lobby | tiles: 2
+- Service corridor | kind: service_corridor | tiles: 3
+- Access ducts | kind: ducts | tiles: 2
+- Server room | kind: server_room | tiles: 1
+- Cold-storage lab | kind: lab | tiles: 2
+- Prototype vault | kind: vault | tiles: 1
+- Loading dock | kind: loading_dock | tiles: 2
+
+security:
+- id: camera-lab-1 | kind: camera | position: 6,2 | label: Thermal camera
+- id: guard-corridor-1 | kind: guard | position: 3,4 | label: Patrolling guard
+- id: drone-loading-1 | kind: security_drone | position: 1,5 | label: Loading dock drone"
+}
+
+test "telemetry helpers handle empty robot lists" {
+  match •packetGenerator.lowestBatteryRobot([]){
+    Some(_)=>false|
+    None()=>match •packetGenerator.lowestSignalRobot([]){
+      Some(_)=>false|
+      None()=>true
+    }
+  }
+}
+
+test "packet labels preserve room and terminal identifiers" {
+  •packetGenerator.roomIdLabel(µRoomId("vault"))="vault" and •packetGenerator.terminalIdLabel(µTerminalId("lab-terminal"))="lab-terminal"
+}

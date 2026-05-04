@@ -1,0 +1,183 @@
+λdefaultContracts()=>[µContractSummary]=[{
+  contractId:µContractId("helixgrid-battery-recovery"),
+  corporation:µCorporationId("helixgrid"),
+  label:"Recover the prototype cryocell battery",
+  objective:µStealPrototypeBattery()
+}]
+
+λdefaultInventory()=>[µInventoryItem]=[
+  {
+    label:"Battery pack",
+    partType:µBatteryPack(),
+    quantity:2
+  },
+  {
+    label:"Signal relay",
+    partType:µSignalRelay(),
+    quantity:1
+  },
+  {
+    label:"Spoofed service badge",
+    partType:µSpoofedServiceBadge(),
+    quantity:1
+  }
+]
+
+λdefaultRobots()=>[µRobotState]=[
+  {
+    archetype:µGeckoMicrocrawler(),
+    battery:54,
+    damage:0,
+    id:µRobotId("gecko-1"),
+    locationLabel:"Duct junction E2",
+    name:"Gecko",
+    parts:[
+      µFiberCamera(),
+      µBatteryPack()
+    ],
+    payload:0,
+    position:{
+      x:4,
+      y:1
+    },
+    signal:58
+  },
+  {
+    archetype:µMiraServiceAndroid(),
+    battery:81,
+    damage:0,
+    id:µRobotId("mira-1"),
+    locationLabel:"Service corridor C4",
+    name:"Mira",
+    parts:[
+      µSpoofedServiceBadge(),
+      µBasicHackingModule()
+    ],
+    payload:0,
+    position:{
+      x:2,
+      y:3
+    },
+    signal:86
+  },
+  {
+    archetype:µAtlasBreacher(),
+    battery:100,
+    damage:0,
+    id:µRobotId("atlas-1"),
+    locationLabel:"Loading dock A6",
+    name:"Atlas",
+    parts:[
+      µArmorPlate(),
+      µCargoClamp()
+    ],
+    payload:1,
+    position:{
+      x:0,
+      y:5
+    },
+    signal:92
+  },
+  {
+    archetype:µWispRelayDrone(),
+    battery:67,
+    damage:0,
+    id:µRobotId("wisp-1"),
+    locationLabel:"Relay point B2",
+    name:"Wisp",
+    parts:[
+      µSignalRelay(),
+      µThermalDampener()
+    ],
+    payload:0,
+    position:{
+      x:1,
+      y:1
+    },
+    signal:73
+  }
+]
+
+λfacilityRoomCount(state:µGameState)=>Int=state.activeMission.facility.rooms reduce (λ(count:Int,room:µRoomState)=>Int=count+1) from 0
+
+λinitialCampaignState()=>µCampaignState={
+  availableContracts:defaultContracts(),
+  completedContracts:[],
+  heat:3,
+  warehouse:{
+    destroyedRobots:[],
+    inventory:defaultInventory(),
+    robots:defaultRobots()
+  }
+}
+
+λinitialGameState()=>µGameState={
+  activeMission:initialMissionState(),
+  campaign:initialCampaignState(),
+  eventLog:[
+    {
+      message:"Mission package assembled for HelixGrid battery recovery.",
+      turn:0
+    },
+    {
+      message:"Relay network seeded and remote units staged.",
+      turn:1
+    }
+  ],
+  schemaVersion:1,
+  seed:1337,
+  turn:1
+}
+
+λinitialMissionState()=>µMissionState={
+  alarmLevel:µAlarmSuspicion(),
+  contract:{
+    contractId:µContractId("helixgrid-battery-recovery"),
+    corporation:µCorporationId("helixgrid"),
+    label:"Recover the prototype cryocell battery",
+    objective:µStealPrototypeBattery()
+  },
+  exposure:12,
+  facility:•facilityGenerator.generateFacilityState(1337),
+  interrupts:[],
+  missionClock:42,
+  objective:{
+    extracted:false,
+    kind:µStealPrototypeBattery(),
+    located:false,
+    objectiveId:µObjectiveId("prototype-battery"),
+    securedBy:None()
+  },
+  orders:[
+    {
+      assignedRobot:µRobotId("gecko-1"),
+      order:µScan(),
+      status:µOrderQueued()
+    },
+    {
+      assignedRobot:µRobotId("mira-1"),
+      order:µHold(),
+      status:µOrderQueued()
+    },
+    {
+      assignedRobot:µRobotId("atlas-1"),
+      order:µMoveTo({
+        x:0,
+        y:5
+      }),
+      status:µOrderQueued()
+    },
+    {
+      assignedRobot:µRobotId("wisp-1"),
+      order:µReturnToRelay(),
+      status:µOrderQueued()
+    }
+  ],
+  robots:defaultRobots(),
+  status:µMissionInProgress(),
+  trace:41
+}
+
+λorderCount(state:µGameState)=>Int=state.activeMission.orders reduce (λ(count:Int,robotOrder:µRobotOrder)=>Int=count+1) from 0
+
+λrosterCount(state:µGameState)=>Int=state.activeMission.robots reduce (λ(count:Int,robot:µRobotState)=>Int=count+1) from 0

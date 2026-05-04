@@ -1,0 +1,19 @@
+λcreateReplayLog(state:µGameState,steps:[µReplayStep])=>µReplayLog={
+  contractId:state.activeMission.contract.contractId,
+  initialSeed:state.seed,
+  schemaVersion:replaySchemaVersion(),
+  steps:steps
+}
+
+λcreateSaveFile(gameVersion:String,savedAt:String,state:µGameState)=>µSaveFile={
+  gameVersion:gameVersion,
+  savedAt:savedAt,
+  schemaVersion:saveSchemaVersion(),
+  state:state
+}
+
+λloadGameState(saveFile:µSaveFile)=>µGameState=saveFile.state
+
+λreplaySchemaVersion()=>Int=1
+
+λsaveSchemaVersion()=>Int=1

@@ -1,0 +1,674 @@
+λdoorPosition(seed:Int)=>µPosition match facilityVariant(seed){
+  0=>{
+    x:6,
+    y:2
+  }|
+  1=>{
+    x:7,
+    y:1
+  }|
+  2=>{
+    x:5,
+    y:2
+  }|
+  _=>{
+    x:5,
+    y:2
+  }
+}
+
+λfacilityConnectivityValid(seed:Int)=>Bool=inBounds(doorPosition(seed))
+  and inBounds(objectiveTilePosition(seed))
+  and roomCount(seed)=7
+
+λfacilityVariant(seed:Int)=>Int=seed%3
+
+λgenerateFacilityState(seed:Int)=>µFacilityState={
+  height:7,
+  rooms:generatedRooms(seed),
+  security:generatedSecurity(seed),
+  tiles:generatedTiles(seed),
+  width:10
+}
+
+λgeneratedRooms(seed:Int)=>[µRoomState] match facilityVariant(seed){
+  0=>[
+    {
+      label:"Front lobby",
+      roomId:µRoomId("lobby"),
+      roomKind:µLobby(),
+      tiles:[
+        {
+          x:0,
+          y:4
+        },
+        {
+          x:1,
+          y:4
+        }
+      ]
+    },
+    {
+      label:"Service corridor",
+      roomId:µRoomId("service-corridor"),
+      roomKind:µServiceCorridor(),
+      tiles:[
+        {
+          x:2,
+          y:3
+        },
+        {
+          x:3,
+          y:3
+        },
+        {
+          x:4,
+          y:3
+        }
+      ]
+    },
+    {
+      label:"Access ducts",
+      roomId:µRoomId("ducts"),
+      roomKind:µDucts(),
+      tiles:[
+        {
+          x:4,
+          y:1
+        },
+        {
+          x:5,
+          y:1
+        }
+      ]
+    },
+    {
+      label:"Server room",
+      roomId:µRoomId("server-room"),
+      roomKind:µServerRoom(),
+      tiles:[{
+        x:6,
+        y:2
+      }]
+    },
+    {
+      label:"Cold-storage lab",
+      roomId:µRoomId("lab"),
+      roomKind:µLab(),
+      tiles:[
+        {
+          x:7,
+          y:2
+        },
+        {
+          x:8,
+          y:2
+        }
+      ]
+    },
+    {
+      label:"Prototype vault",
+      roomId:µRoomId("vault"),
+      roomKind:µVault(),
+      tiles:[{
+        x:8,
+        y:1
+      }]
+    },
+    {
+      label:"Loading dock",
+      roomId:µRoomId("loading-dock"),
+      roomKind:µLoadingDock(),
+      tiles:[
+        {
+          x:0,
+          y:5
+        },
+        {
+          x:1,
+          y:5
+        }
+      ]
+    }
+  ]|
+  1=>[
+    {
+      label:"Front lobby",
+      roomId:µRoomId("lobby"),
+      roomKind:µLobby(),
+      tiles:[
+        {
+          x:0,
+          y:4
+        },
+        {
+          x:1,
+          y:4
+        }
+      ]
+    },
+    {
+      label:"Service corridor",
+      roomId:µRoomId("service-corridor"),
+      roomKind:µServiceCorridor(),
+      tiles:[
+        {
+          x:2,
+          y:3
+        },
+        {
+          x:3,
+          y:3
+        },
+        {
+          x:4,
+          y:3
+        }
+      ]
+    },
+    {
+      label:"Access ducts",
+      roomId:µRoomId("ducts"),
+      roomKind:µDucts(),
+      tiles:[
+        {
+          x:4,
+          y:1
+        },
+        {
+          x:5,
+          y:1
+        },
+        {
+          x:6,
+          y:1
+        }
+      ]
+    },
+    {
+      label:"Server room",
+      roomId:µRoomId("server-room"),
+      roomKind:µServerRoom(),
+      tiles:[{
+        x:6,
+        y:2
+      }]
+    },
+    {
+      label:"Cold-storage lab",
+      roomId:µRoomId("lab"),
+      roomKind:µLab(),
+      tiles:[
+        {
+          x:7,
+          y:2
+        },
+        {
+          x:8,
+          y:2
+        }
+      ]
+    },
+    {
+      label:"Prototype vault",
+      roomId:µRoomId("vault"),
+      roomKind:µVault(),
+      tiles:[{
+        x:7,
+        y:1
+      }]
+    },
+    {
+      label:"Loading dock",
+      roomId:µRoomId("loading-dock"),
+      roomKind:µLoadingDock(),
+      tiles:[
+        {
+          x:0,
+          y:5
+        },
+        {
+          x:1,
+          y:5
+        }
+      ]
+    }
+  ]|
+  2=>[
+    {
+      label:"Front lobby",
+      roomId:µRoomId("lobby"),
+      roomKind:µLobby(),
+      tiles:[
+        {
+          x:0,
+          y:4
+        },
+        {
+          x:1,
+          y:4
+        }
+      ]
+    },
+    {
+      label:"Service corridor",
+      roomId:µRoomId("service-corridor"),
+      roomKind:µServiceCorridor(),
+      tiles:[
+        {
+          x:2,
+          y:3
+        },
+        {
+          x:3,
+          y:3
+        },
+        {
+          x:4,
+          y:3
+        }
+      ]
+    },
+    {
+      label:"Access ducts",
+      roomId:µRoomId("ducts"),
+      roomKind:µDucts(),
+      tiles:[
+        {
+          x:4,
+          y:1
+        },
+        {
+          x:5,
+          y:1
+        }
+      ]
+    },
+    {
+      label:"Server room",
+      roomId:µRoomId("server-room"),
+      roomKind:µServerRoom(),
+      tiles:[
+        {
+          x:5,
+          y:2
+        },
+        {
+          x:6,
+          y:2
+        }
+      ]
+    },
+    {
+      label:"Cold-storage lab",
+      roomId:µRoomId("lab"),
+      roomKind:µLab(),
+      tiles:[
+        {
+          x:7,
+          y:1
+        },
+        {
+          x:8,
+          y:2
+        }
+      ]
+    },
+    {
+      label:"Prototype vault",
+      roomId:µRoomId("vault"),
+      roomKind:µVault(),
+      tiles:[{
+        x:8,
+        y:1
+      }]
+    },
+    {
+      label:"Loading dock",
+      roomId:µRoomId("loading-dock"),
+      roomKind:µLoadingDock(),
+      tiles:[
+        {
+          x:0,
+          y:5
+        },
+        {
+          x:1,
+          y:5
+        },
+        {
+          x:2,
+          y:5
+        }
+      ]
+    }
+  ]|
+  _=>[
+    {
+      label:"Front lobby",
+      roomId:µRoomId("lobby"),
+      roomKind:µLobby(),
+      tiles:[
+        {
+          x:0,
+          y:4
+        },
+        {
+          x:1,
+          y:4
+        }
+      ]
+    },
+    {
+      label:"Service corridor",
+      roomId:µRoomId("service-corridor"),
+      roomKind:µServiceCorridor(),
+      tiles:[
+        {
+          x:2,
+          y:3
+        },
+        {
+          x:3,
+          y:3
+        },
+        {
+          x:4,
+          y:3
+        }
+      ]
+    },
+    {
+      label:"Access ducts",
+      roomId:µRoomId("ducts"),
+      roomKind:µDucts(),
+      tiles:[
+        {
+          x:4,
+          y:1
+        },
+        {
+          x:5,
+          y:1
+        }
+      ]
+    },
+    {
+      label:"Server room",
+      roomId:µRoomId("server-room"),
+      roomKind:µServerRoom(),
+      tiles:[
+        {
+          x:5,
+          y:2
+        },
+        {
+          x:6,
+          y:2
+        }
+      ]
+    },
+    {
+      label:"Cold-storage lab",
+      roomId:µRoomId("lab"),
+      roomKind:µLab(),
+      tiles:[
+        {
+          x:7,
+          y:1
+        },
+        {
+          x:8,
+          y:2
+        }
+      ]
+    },
+    {
+      label:"Prototype vault",
+      roomId:µRoomId("vault"),
+      roomKind:µVault(),
+      tiles:[{
+        x:8,
+        y:1
+      }]
+    },
+    {
+      label:"Loading dock",
+      roomId:µRoomId("loading-dock"),
+      roomKind:µLoadingDock(),
+      tiles:[
+        {
+          x:0,
+          y:5
+        },
+        {
+          x:1,
+          y:5
+        },
+        {
+          x:2,
+          y:5
+        }
+      ]
+    }
+  ]
+}
+
+λgeneratedSecurity(seed:Int)=>[µSecurityEntity] match facilityVariant(seed){
+  0=>[
+    {
+      entityId:"camera-lab-1",
+      kind:µCamera(),
+      label:"Thermal camera",
+      position:{
+        x:6,
+        y:2
+      }
+    },
+    {
+      entityId:"guard-corridor-1",
+      kind:µGuard(),
+      label:"Patrolling guard",
+      position:{
+        x:3,
+        y:4
+      }
+    },
+    {
+      entityId:"drone-loading-1",
+      kind:µSecurityDrone(),
+      label:"Loading dock drone",
+      position:{
+        x:1,
+        y:5
+      }
+    }
+  ]|
+  1=>[
+    {
+      entityId:"camera-vault-1",
+      kind:µCamera(),
+      label:"Vault camera",
+      position:{
+        x:7,
+        y:1
+      }
+    },
+    {
+      entityId:"guard-lobby-1",
+      kind:µGuard(),
+      label:"Lobby guard",
+      position:{
+        x:1,
+        y:4
+      }
+    },
+    {
+      entityId:"drone-lab-1",
+      kind:µSecurityDrone(),
+      label:"Lab drone",
+      position:{
+        x:8,
+        y:2
+      }
+    }
+  ]|
+  2=>[
+    {
+      entityId:"camera-server-1",
+      kind:µCamera(),
+      label:"Server camera",
+      position:{
+        x:5,
+        y:2
+      }
+    },
+    {
+      entityId:"guard-dock-1",
+      kind:µGuard(),
+      label:"Loading dock guard",
+      position:{
+        x:2,
+        y:5
+      }
+    },
+    {
+      entityId:"drone-corridor-1",
+      kind:µSecurityDrone(),
+      label:"Corridor drone",
+      position:{
+        x:4,
+        y:3
+      }
+    }
+  ]|
+  _=>[
+    {
+      entityId:"camera-server-1",
+      kind:µCamera(),
+      label:"Server camera",
+      position:{
+        x:5,
+        y:2
+      }
+    },
+    {
+      entityId:"guard-dock-1",
+      kind:µGuard(),
+      label:"Loading dock guard",
+      position:{
+        x:2,
+        y:5
+      }
+    },
+    {
+      entityId:"drone-corridor-1",
+      kind:µSecurityDrone(),
+      label:"Corridor drone",
+      position:{
+        x:4,
+        y:3
+      }
+    }
+  ]
+}
+
+λgeneratedTiles(seed:Int)=>[µFacilityTile]=[
+  {
+    kind:µEntryTile(),
+    position:{
+      x:0,
+      y:5
+    },
+    revealed:true,
+    walkable:true
+  },
+  {
+    kind:µRelayTile(),
+    position:{
+      x:1,
+      y:1
+    },
+    revealed:true,
+    walkable:true
+  },
+  {
+    kind:µDuctTile(),
+    position:{
+      x:4,
+      y:1
+    },
+    revealed:true,
+    walkable:true
+  },
+  {
+    kind:µFloorTile(),
+    position:{
+      x:2,
+      y:3
+    },
+    revealed:true,
+    walkable:true
+  },
+  {
+    kind:µDoorTile(µDoorId("lab-door")),
+    position:doorPosition(seed),
+    revealed:true,
+    walkable:false
+  },
+  {
+    kind:µTerminalTile(µTerminalId("lab-terminal")),
+    position:{
+      x:7,
+      y:2
+    },
+    revealed:true,
+    walkable:true
+  },
+  {
+    kind:µObjectiveTile(µObjectiveId("prototype-battery")),
+    position:objectiveTilePosition(seed),
+    revealed:false,
+    walkable:true
+  },
+  {
+    kind:µWallTile(),
+    position:{
+      x:6,
+      y:1
+    },
+    revealed:true,
+    walkable:false
+  }
+]
+
+λinBounds(position:µPosition)=>Bool=§numeric.inRange(
+  9,
+  0,
+  position.x
+) and §numeric.inRange(
+  6,
+  0,
+  position.y
+)
+
+λobjectiveTilePosition(seed:Int)=>µPosition match facilityVariant(seed){
+  0=>{
+    x:8,
+    y:2
+  }|
+  1=>{
+    x:7,
+    y:2
+  }|
+  2=>{
+    x:8,
+    y:1
+  }|
+  _=>{
+    x:8,
+    y:1
+  }
+}
+
+λroomCount(seed:Int)=>Int=generatedRooms(seed) reduce (λ(count:Int,room:µRoomState)=>Int=count+1) from 0

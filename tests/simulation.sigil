@@ -1,0 +1,77 @@
+λmain()=>Unit=()
+
+test "advanceOneOrder turns the opening scan into an objective interrupt" {
+  l next=(•simulation.advanceOneOrder(•gameState.initialGameState()):µGameState);
+  next.activeMission.objective.located
+    and next.activeMission.missionClock=43
+    and next.turn=2
+    and #next.activeMission.orders=3
+    and (match next.activeMission.interrupts{
+      [µObjectiveFound(objectiveId)]=>objectiveId=µObjectiveId("prototype-battery")|
+      _=>false
+    })
+}
+
+test "resumeUntilInterrupt stops after the first player-facing interrupt" {
+  l next=(•simulation.resumeUntilInterrupt(
+    4,
+    •gameState.initialGameState()
+  ):µGameState);
+  #next.activeMission.orders=3
+    and #next.eventLog=3
+    and (match next.activeMission.interrupts{
+      [µObjectiveFound(_)]=>true|
+      _=>false
+    })
+}
+
+test "repeated acknowledgements let later queued orders resolve" {
+  l afterRelay=(•simulation.advanceOneOrder(•simulation.acknowledgeInterrupts(•simulation.advanceOneOrder(•simulation.acknowledgeInterrupts(•simulation.advanceOneOrder(•simulation.acknowledgeInterrupts(•simulation.advanceOneOrder(•gameState.initialGameState()))))))):µGameState);
+  #afterRelay.activeMission.orders=0 and (match §list.find(
+    λ(robot:µRobotState)=>Bool=robot.id=µRobotId("wisp-1"),
+    afterRelay.activeMission.robots
+  ){
+    Some(robot)=>robot.signal=100|
+    None()=>false
+  })
+}
+
+test "findRobot returns None for an unknown robot id" {
+  match •simulation.findRobot(
+    µRobotId("ghost-1"),
+    •gameState.initialGameState().activeMission.robots
+  ){
+    Some(_)=>false|
+    None()=>true
+  }
+}
+
+test "updateObjectiveExtracted marks the objective as extracted" {
+  l objective=(•simulation.updateObjectiveExtracted(•gameState.initialGameState().activeMission.objective):µObjectiveState);
+  objective.extracted and objective.located
+}
+
+test "updateObjectiveSecured records which robot secured the package" {
+  l objective=(•simulation.updateObjectiveSecured(
+    •gameState.initialGameState().activeMission.objective,
+    µRobotId("atlas-1")
+  ):µObjectiveState);
+  match objective.securedBy{
+    Some(robotId)=>robotId=µRobotId("atlas-1") and objective.located|
+    None()=>false
+  }
+}
+
+test "updateRobotPayload rewrites the chosen robot payload" {
+  match §list.find(
+    λ(robot:µRobotState)=>Bool=robot.id=µRobotId("atlas-1"),
+    •simulation.updateRobotPayload(
+      2,
+      µRobotId("atlas-1"),
+      •gameState.initialGameState().activeMission.robots
+    )
+  ){
+    Some(robot)=>robot.payload=2|
+    None()=>false
+  }
+}

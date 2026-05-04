@@ -1,0 +1,438 @@
+λacknowledgeInterrupts(state:µGameState)=>µGameState={
+  activeMission:{
+    alarmLevel:state.activeMission.alarmLevel,
+    contract:state.activeMission.contract,
+    exposure:state.activeMission.exposure,
+    facility:state.activeMission.facility,
+    interrupts:[],
+    missionClock:state.activeMission.missionClock,
+    objective:state.activeMission.objective,
+    orders:state.activeMission.orders,
+    robots:state.activeMission.robots,
+    status:state.activeMission.status,
+    trace:state.activeMission.trace
+  },
+  campaign:state.campaign,
+  eventLog:state.eventLog,
+  schemaVersion:state.schemaVersion,
+  seed:state.seed,
+  turn:state.turn
+}
+
+λadvanceOneOrder(state:µGameState)=>µGameState match state.activeMission.interrupts{
+  []=>match state.activeMission.orders{
+    []=>state|
+    [
+  order,
+  .rest
+]=>applyOrder(
+      order,
+      rest,
+      state
+    )
+  }|
+  _=>state
+}
+
+λalarmForTrace(trace:Int)=>µAlarmLevel match trace≥95{
+  true=>µAlarmTacticalResponse()|
+  false=>match trace≥80{
+    true=>µAlarmLocal()|
+    false=>match trace≥65{
+      true=>µAlarmSearch()|
+      false=>match trace≥50{
+        true=>µAlarmCounterOperatorTrace()|
+        false=>µAlarmSuspicion()
+      }
+    }
+  }
+}
+
+λappendEvent(message:String,state:µGameState)=>[µEventEntry]=state.eventLog⧺[{
+  message:message,
+  turn:state.turn+1
+}]
+
+λapplyOrder(order:µRobotOrder,rest:[µRobotOrder],state:µGameState)=>µGameState match order.order{
+  µAbortMission()=>applyStep(
+    [µInterruptOrderCompleted(order.assignedRobot)],
+    0,
+    robotLabel(
+      order.assignedRobot,
+      state
+    )++" received an operator abort and began mission scrub.",
+    state.activeMission.objective,
+    rest,
+    state.activeMission.robots,
+    state,
+    µMissionAborted(),
+    0
+  )|
+  µExtract()=>match state.activeMission.objective.securedBy{
+    Some(owner)=>match owner=order.assignedRobot{
+      true=>applyStep(
+        [µInterruptOrderCompleted(order.assignedRobot)],
+        0,
+        robotLabel(
+          order.assignedRobot,
+          state
+        )++" exfiltrated with the secured objective.",
+        updateObjectiveExtracted(state.activeMission.objective),
+        rest,
+        state.activeMission.robots,
+        state,
+        µMissionExtracted(),
+        1
+      )|
+      false=>applyStep(
+        [µInterruptOrderFailed(
+          order.assignedRobot,
+          "Objective is secured by a different robot."
+        )],
+        0,
+        robotLabel(
+          order.assignedRobot,
+          state
+        )++" reached extraction without the secured package.",
+        state.activeMission.objective,
+        rest,
+        state.activeMission.robots,
+        state,
+        state.activeMission.status,
+        0
+      )
+    }|
+    None()=>applyStep(
+      [µInterruptOrderFailed(
+        order.assignedRobot,
+        "No objective has been secured for extraction."
+      )],
+      0,
+      robotLabel(
+        order.assignedRobot,
+        state
+      )++" reached extraction without any secured objective.",
+      state.activeMission.objective,
+      rest,
+      state.activeMission.robots,
+      state,
+      state.activeMission.status,
+      0
+    )
+  }|
+  µFollow(targetRobot)=>match findRobot(
+    targetRobot,
+    state.activeMission.robots
+  ){
+    Some(robot)=>applyStep(
+      [µInterruptOrderCompleted(order.assignedRobot)],
+      1,
+      robotLabel(
+        order.assignedRobot,
+        state
+      )
+        ++" shadowed "
+        ++robot.name
+        ++" through the next segment.",
+      state.activeMission.objective,
+      rest,
+      updateRobotPosition(
+        robot.locationLabel,
+        robot.position,
+        order.assignedRobot,
+        state.activeMission.robots
+      ),
+      state,
+      state.activeMission.status,
+      1
+    )|
+    None()=>applyStep(
+      [µInterruptOrderFailed(
+        order.assignedRobot,
+        "Follow target is unavailable."
+      )],
+      0,
+      robotLabel(
+        order.assignedRobot,
+        state
+      )++" lost the assigned follow target.",
+      state.activeMission.objective,
+      rest,
+      state.activeMission.robots,
+      state,
+      state.activeMission.status,
+      0
+    )
+  }|
+  µHack(_)=>applyStep(
+    [µInterruptOrderCompleted(order.assignedRobot)],
+    3,
+    robotLabel(
+      order.assignedRobot,
+      state
+    )++" completed a terminal breach and raised local counter-trace.",
+    state.activeMission.objective,
+    rest,
+    state.activeMission.robots,
+    state,
+    state.activeMission.status,
+    10
+  )|
+  µHold()=>applyStep(
+    [µInterruptOrderCompleted(order.assignedRobot)],
+    0,
+    robotLabel(
+      order.assignedRobot,
+      state
+    )++" is holding position for the next command window.",
+    state.activeMission.objective,
+    rest,
+    state.activeMission.robots,
+    state,
+    state.activeMission.status,
+    0
+  )|
+  µInteract(objectiveId)=>match objectiveId=state.activeMission.objective.objectiveId{
+    true=>applyStep(
+      [µInterruptOrderCompleted(order.assignedRobot)],
+      2,
+      robotLabel(
+        order.assignedRobot,
+        state
+      )++" secured the prototype package for extraction.",
+      updateObjectiveSecured(
+        state.activeMission.objective,
+        order.assignedRobot
+      ),
+      rest,
+      updateRobotPayload(
+        1,
+        order.assignedRobot,
+        state.activeMission.robots
+      ),
+      state,
+      state.activeMission.status,
+      4
+    )|
+    false=>applyStep(
+      [µInterruptOrderFailed(
+        order.assignedRobot,
+        "Objective is not present at this site."
+      )],
+      0,
+      robotLabel(
+        order.assignedRobot,
+        state
+      )++" could not find the assigned objective.",
+      state.activeMission.objective,
+      rest,
+      state.activeMission.robots,
+      state,
+      state.activeMission.status,
+      0
+    )
+  }|
+  µMoveTo(targetPosition)=>applyStep(
+    [µInterruptOrderCompleted(order.assignedRobot)],
+    0,
+    robotLabel(
+      order.assignedRobot,
+      state
+    )
+      ++" advanced to "
+      ++positionLabel(targetPosition)
+      ++".",
+    state.activeMission.objective,
+    rest,
+    updateRobotPosition(
+      "Advance point "++positionLabel(targetPosition),
+      targetPosition,
+      order.assignedRobot,
+      state.activeMission.robots
+    ),
+    state,
+    state.activeMission.status,
+    1
+  )|
+  µReturnToRelay()=>applyStep(
+    [µInterruptOrderCompleted(order.assignedRobot)],
+    0,
+    robotLabel(
+      order.assignedRobot,
+      state
+    )++" refreshed its relay link and recovered full signal.",
+    state.activeMission.objective,
+    rest,
+    updateRobotSignal(
+      order.assignedRobot,
+      state.activeMission.robots,
+      100
+    ),
+    state,
+    state.activeMission.status,
+    0
+  )|
+  µScan()=>applyStep(
+    [µObjectiveFound(state.activeMission.objective.objectiveId)],
+    1,
+    robotLabel(
+      order.assignedRobot,
+      state
+    )++" completed a fiber sweep and located the prototype battery.",
+    updateObjectiveLocated(state.activeMission.objective),
+    rest,
+    state.activeMission.robots,
+    state,
+    state.activeMission.status,
+    2
+  )
+}
+
+λapplyStep(baseInterrupts:[µInterrupt],exposureDelta:Int,message:String,objective:µObjectiveState,orders:[µRobotOrder],robots:[µRobotState],state:µGameState,status:µMissionStatus,traceDelta:Int)=>µGameState={
+  activeMission:{
+    alarmLevel:alarmForTrace(state.activeMission.trace+traceDelta),
+    contract:state.activeMission.contract,
+    exposure:state.activeMission.exposure+exposureDelta,
+    facility:state.activeMission.facility,
+    interrupts:interruptsForStep(
+      baseInterrupts,
+      alarmForTrace(state.activeMission.trace+traceDelta),
+      state.activeMission.trace+traceDelta,
+      state
+    ),
+    missionClock:state.activeMission.missionClock+1,
+    objective:objective,
+    orders:orders,
+    robots:robots,
+    status:status,
+    trace:state.activeMission.trace+traceDelta
+  },
+  campaign:state.campaign,
+  eventLog:appendEvent(
+    message,
+    state
+  ),
+  schemaVersion:state.schemaVersion,
+  seed:state.seed,
+  turn:state.turn+1
+}
+
+λfindRobot(robotId:µRobotId,robots:[µRobotState])=>Option[µRobotState]=§list.find(
+  λ(robot:µRobotState)=>Bool=robot.id=robotId,
+  robots
+)
+
+λinterruptsForStep(baseInterrupts:[µInterrupt],nextAlarm:µAlarmLevel,nextTrace:Int,state:µGameState)=>[µInterrupt]=thresholdInterrupts(
+  match nextAlarm=state.activeMission.alarmLevel{
+    true=>baseInterrupts|
+    false=>baseInterrupts⧺[µAlarmChanged(nextAlarm)]
+  },
+  nextTrace,
+  state
+)
+
+λpositionLabel(position:µPosition)=>String=§string.intToString(position.x)
+  ++","
+  ++§string.intToString(position.y)
+
+λresumeUntilInterrupt(limit:Int,state:µGameState)=>µGameState match limit{
+  0=>state|
+  _=>match state.activeMission.interrupts{
+    []=>match state.activeMission.orders{
+      []=>state|
+      _=>resumeUntilInterrupt(
+        limit-1,
+        advanceOneOrder(state)
+      )
+    }|
+    _=>state
+  }
+}
+
+λrobotLabel(robotId:µRobotId,state:µGameState)=>String match findRobot(
+  robotId,
+  state.activeMission.robots
+){
+  Some(robot)=>robot.name|
+  None()=>"Unmapped robot"
+}
+
+λthresholdInterrupts(baseInterrupts:[µInterrupt],nextTrace:Int,state:µGameState)=>[µInterrupt] match state.activeMission.trace<50{
+  true=>match nextTrace≥50{
+    true=>baseInterrupts⧺[µTraceThresholdCrossed(nextTrace)]|
+    false=>baseInterrupts
+  }|
+  false=>baseInterrupts
+}
+
+λupdateObjectiveExtracted(objective:µObjectiveState)=>µObjectiveState={
+  extracted:true,
+  kind:objective.kind,
+  located:true,
+  objectiveId:objective.objectiveId,
+  securedBy:objective.securedBy
+}
+
+λupdateObjectiveLocated(objective:µObjectiveState)=>µObjectiveState={
+  extracted:objective.extracted,
+  kind:objective.kind,
+  located:true,
+  objectiveId:objective.objectiveId,
+  securedBy:objective.securedBy
+}
+
+λupdateObjectiveSecured(objective:µObjectiveState,robotId:µRobotId)=>µObjectiveState={
+  extracted:objective.extracted,
+  kind:objective.kind,
+  located:true,
+  objectiveId:objective.objectiveId,
+  securedBy:Some(robotId)
+}
+
+λupdateRobotPayload(payload:Int,robotId:µRobotId,robots:[µRobotState])=>[µRobotState]=robots map (λ(robot:µRobotState)=>µRobotState match robot.id=robotId{
+  true=>{
+    archetype:robot.archetype,
+    battery:robot.battery,
+    damage:robot.damage,
+    id:robot.id,
+    locationLabel:robot.locationLabel,
+    name:robot.name,
+    parts:robot.parts,
+    payload:payload,
+    position:robot.position,
+    signal:robot.signal
+  }|
+  false=>robot
+})
+
+λupdateRobotPosition(locationLabel:String,position:µPosition,robotId:µRobotId,robots:[µRobotState])=>[µRobotState]=robots map (λ(robot:µRobotState)=>µRobotState match robot.id=robotId{
+  true=>{
+    archetype:robot.archetype,
+    battery:robot.battery,
+    damage:robot.damage,
+    id:robot.id,
+    locationLabel:locationLabel,
+    name:robot.name,
+    parts:robot.parts,
+    payload:robot.payload,
+    position:position,
+    signal:robot.signal
+  }|
+  false=>robot
+})
+
+λupdateRobotSignal(robotId:µRobotId,robots:[µRobotState],signal:Int)=>[µRobotState]=robots map (λ(robot:µRobotState)=>µRobotState match robot.id=robotId{
+  true=>{
+    archetype:robot.archetype,
+    battery:robot.battery,
+    damage:robot.damage,
+    id:robot.id,
+    locationLabel:robot.locationLabel,
+    name:robot.name,
+    parts:robot.parts,
+    payload:robot.payload,
+    position:robot.position,
+    signal:signal
+  }|
+  false=>robot
+})

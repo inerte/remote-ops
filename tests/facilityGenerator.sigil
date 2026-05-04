@@ -1,0 +1,13 @@
+λmain()=>Unit=()
+
+test "facility generator keeps generated layouts in bounds" {
+  •facilityGenerator.facilityConnectivityValid(1337)
+}
+
+test "facility generator keeps the room graph at seven rooms" {
+  •facilityGenerator.roomCount(1337)=7
+}
+
+test "facility generator varies objective placement by seed" {
+  •facilityGenerator.objectiveTilePosition(1337).y≠•facilityGenerator.objectiveTilePosition(1338).y
+}

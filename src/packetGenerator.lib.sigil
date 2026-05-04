@@ -1,0 +1,408 @@
+λalarmLevelLabel(alarm:µAlarmLevel)=>String match alarm{
+  µAlarmCounterOperatorTrace()=>"counter_operator_trace"|
+  µAlarmLocal()=>"local"|
+  µAlarmLockdown()=>"lockdown"|
+  µAlarmNormal()=>"normal"|
+  µAlarmSearch()=>"search"|
+  µAlarmSuspicion()=>"suspicion"|
+  µAlarmTacticalResponse()=>"tactical_response"
+}
+
+λboardSizeLabel(facility:µFacilityState)=>String=§string.intToString(facility.width)
+  ++"x"
+  ++§string.intToString(facility.height)
+
+λboolLabel(value:Bool)=>String match value{
+  true=>"true"|
+  false=>"false"
+}
+
+λcontractIdLabel(contractId:µContractId)=>String match contractId{
+  µContractId(value)=>value
+}
+
+λcorporationIdLabel(corporationId:µCorporationId)=>String match corporationId{
+  µCorporationId(value)=>value
+}
+
+λeventLine(entry:µEventEntry)=>String="- turn: "
+  ++§string.intToString(entry.turn)
+  ++" | message: "
+  ++entry.message
+
+λeventLines(events:[µEventEntry])=>[String] match events{
+  []=>["- none"]|
+  _=>events map (λ(entry:µEventEntry)=>String=eventLine(entry))
+}
+
+λfindOrder(orders:[µRobotOrder],robotId:µRobotId)=>Option[µRobotOrder]=§list.find(
+  λ(robotOrder:µRobotOrder)=>Bool=robotOrder.assignedRobot=robotId,
+  orders
+)
+
+λgeneratePackets(state:µGameState)=>[µPacketSummary]=[
+  missionBriefPacket(state),
+  tacticalSnapshotPacket(state),
+  recentEventLogPacket(state),
+  telemetryPacket(state)
+]
+
+λinterruptLabel(interrupt:µInterrupt)=>String match interrupt{
+  µAlarmChanged(alarm)=>"alarm_changed "++alarmLevelLabel(alarm)|
+  µCameraDetectedRobot(
+  robotId,
+  label
+)=>"camera_detected_robot "
+    ++robotIdLabel(robotId)
+    ++" @ "
+    ++label|
+  µEnemySpotted(
+  robotId,
+  label
+)=>"enemy_spotted "
+    ++robotIdLabel(robotId)
+    ++" @ "
+    ++label|
+  µNewRoomRevealed(roomId)=>"new_room_revealed "++roomIdLabel(roomId)|
+  µObjectiveFound(objectiveId)=>"objective_found "++objectiveIdLabel(objectiveId)|
+  µInterruptOrderCompleted(robotId)=>"order_completed "++robotIdLabel(robotId)|
+  µInterruptOrderFailed(
+  robotId,
+  message
+)=>"order_failed "
+    ++robotIdLabel(robotId)
+    ++" | "
+    ++message|
+  µRobotDamaged(
+  robotId,
+  amount
+)=>"robot_damaged "
+    ++robotIdLabel(robotId)
+    ++" | +"
+    ++§string.intToString(amount)|
+  µRouteBlocked(robotId)=>"route_blocked "++robotIdLabel(robotId)|
+  µSignalLost(robotId)=>"signal_lost "++robotIdLabel(robotId)|
+  µTraceThresholdCrossed(trace)=>"trace_threshold_crossed "++§string.intToString(trace)
+}
+
+λinterruptLines(interrupts:[µInterrupt])=>[String] match interrupts{
+  []=>["- none"]|
+  _=>interrupts map (λ(interrupt:µInterrupt)=>String="- "++interruptLabel(interrupt))
+}
+
+λjoinLines(lines:[String])=>String match lines{
+  []=>""|
+  [
+  head,
+  .tail
+]=>tail reduce (λ(text:String,line:String)=>String=text
+    ++"
+"
+    ++line) from head
+}
+
+λlowestBatteryRobot(robots:[µRobotState])=>Option[µRobotState] match robots{
+  []=>None()|
+  [
+  head,
+  .tail
+]=>Some(tail reduce (λ(lowest:µRobotState,robot:µRobotState)=>µRobotState match robot.battery<lowest.battery{
+    true=>robot|
+    false=>lowest
+  }) from head)
+}
+
+λlowestBatterySummary(robots:[µRobotState])=>String match lowestBatteryRobot(robots){
+  Some(robot)=>robotIdLabel(robot.id)
+    ++" | "
+    ++§string.intToString(robot.battery)|
+  None()=>"none"
+}
+
+λlowestSignalRobot(robots:[µRobotState])=>Option[µRobotState] match robots{
+  []=>None()|
+  [
+  head,
+  .tail
+]=>Some(tail reduce (λ(lowest:µRobotState,robot:µRobotState)=>µRobotState match robot.signal<lowest.signal{
+    true=>robot|
+    false=>lowest
+  }) from head)
+}
+
+λlowestSignalSummary(robots:[µRobotState])=>String match lowestSignalRobot(robots){
+  Some(robot)=>robotIdLabel(robot.id)
+    ++" | "
+    ++§string.intToString(robot.signal)|
+  None()=>"none"
+}
+
+λmissionBriefPacket(state:µGameState)=>µPacketSummary={
+  body:joinLines([
+    "MISSION BRIEF",
+    "",
+    "packet_type: mission_brief",
+    "turn: "++§string.intToString(state.turn),
+    "seed: "++§string.intToString(state.seed),
+    "corporation_id: "++corporationIdLabel(state.activeMission.contract.corporation),
+    "contract_id: "++contractIdLabel(state.activeMission.contract.contractId),
+    "contract_label: "++state.activeMission.contract.label,
+    "objective_id: "++objectiveIdLabel(state.activeMission.objective.objectiveId),
+    "objective_kind: "++objectiveKindLabel(state.activeMission.objective.kind),
+    "objective_status: "++objectiveStatusLabel(state.activeMission.objective),
+    "mission_status: "++missionStatusLabel(state.activeMission.status),
+    "mission_clock_tick: "++§string.intToString(state.activeMission.missionClock),
+    "alarm_level: "++alarmLevelLabel(state.activeMission.alarmLevel),
+    "trace_percent: "++§string.intToString(state.activeMission.trace),
+    "exposure: "++§string.intToString(state.activeMission.exposure),
+    "facility_rooms: "++§string.intToString(#state.activeMission.facility.rooms),
+    "security_entities: "++§string.intToString(#state.activeMission.facility.security)
+  ]),
+  id:"mission-brief",
+  label:"Mission Brief"
+}
+
+λmissionStatusLabel(status:µMissionStatus)=>String match status{
+  µMissionAborted()=>"aborted"|
+  µMissionExtracted()=>"extracted"|
+  µMissionFailed(reason)=>"failed | "++reason|
+  µMissionInProgress()=>"in_progress"
+}
+
+λobjectiveIdLabel(objectiveId:µObjectiveId)=>String match objectiveId{
+  µObjectiveId(value)=>value
+}
+
+λobjectiveKindLabel(kind:µObjectiveKind)=>String match kind{
+  µPhotographPrototypeBattery()=>"photograph_prototype_battery"|
+  µStealPrototypeBattery()=>"steal_prototype_battery"
+}
+
+λobjectiveOwnerLabel(objective:µObjectiveState)=>String match objective.securedBy{
+  Some(robotId)=>robotIdLabel(robotId)|
+  None()=>"none"
+}
+
+λobjectiveStatusLabel(objective:µObjectiveState)=>String match objective.extracted{
+  true=>"extracted"|
+  false=>match objective.securedBy{
+    Some(_)=>"secured"|
+    None()=>match objective.located{
+      true=>"located"|
+      false=>"unlocated"
+    }
+  }
+}
+
+λorderLabel(order:µOrder)=>String match order{
+  µAbortMission()=>"abort_mission"|
+  µExtract()=>"extract"|
+  µFollow(targetRobot)=>"follow "++robotIdLabel(targetRobot)|
+  µHack(terminalId)=>"hack "++terminalIdLabel(terminalId)|
+  µHold()=>"hold"|
+  µInteract(objectiveId)=>"interact "++objectiveIdLabel(objectiveId)|
+  µMoveTo(position)=>"move_to "++positionLabel(position)|
+  µReturnToRelay()=>"return_to_relay"|
+  µScan()=>"scan"
+}
+
+λorderStatusLabel(status:µOrderStatus)=>String match status{
+  µOrderBlocked(interrupt)=>"blocked | "++interruptLabel(interrupt)|
+  µOrderComplete()=>"complete"|
+  µOrderFailed(message)=>"failed | "++message|
+  µOrderInterrupted(interrupt)=>"interrupted | "++interruptLabel(interrupt)|
+  µOrderQueued()=>"queued"|
+  µOrderRunning()=>"running"
+}
+
+λpacketCount(state:µGameState)=>Int=generatePackets(state) reduce (λ(count:Int,packet:µPacketSummary)=>Int=count+1) from 0
+
+λpacketOrderSummary(orders:[µRobotOrder],robotId:µRobotId)=>String match findOrder(
+  orders,
+  robotId
+){
+  Some(robotOrder)=>orderLabel(robotOrder.order)
+    ++" | "
+    ++orderStatusLabel(robotOrder.status)|
+  None()=>"none"
+}
+
+λpayloadUnits(robots:[µRobotState])=>Int=robots reduce (λ(total:Int,robot:µRobotState)=>Int=total+robot.payload) from 0
+
+λpositionLabel(position:µPosition)=>String=§string.intToString(position.x)
+  ++","
+  ++§string.intToString(position.y)
+
+λrecentEventLogPacket(state:µGameState)=>µPacketSummary={
+  body:joinLines([
+    "RECENT EVENT LOG",
+    "",
+    "packet_type: recent_event_log",
+    "event_count: "++§string.intToString(#state.eventLog),
+    "events:"
+  ]⧺eventLines(state.eventLog)),
+  id:"recent-event-log",
+  label:"Recent Event Log"
+}
+
+λrobotArchetypeLabel(archetype:µRobotArchetype)=>String match archetype{
+  µAtlasBreacher()=>"atlas_breacher"|
+  µGeckoMicrocrawler()=>"gecko_microcrawler"|
+  µMiraServiceAndroid()=>"mira_service_android"|
+  µWispRelayDrone()=>"wisp_relay_drone"
+}
+
+λrobotIdLabel(robotId:µRobotId)=>String match robotId{
+  µRobotId(value)=>value
+}
+
+λrobotLine(orders:[µRobotOrder],robot:µRobotState)=>String="- id: "
+  ++robotIdLabel(robot.id)
+  ++" | name: "
+  ++robot.name
+  ++" | archetype: "
+  ++robotArchetypeLabel(robot.archetype)
+  ++" | location: "
+  ++robot.locationLabel
+  ++" | position: "
+  ++positionLabel(robot.position)
+  ++" | battery: "
+  ++§string.intToString(robot.battery)
+  ++" | signal: "
+  ++signalStatusLabel(robot.signal)
+  ++" ("
+  ++§string.intToString(robot.signal)
+  ++") | payload: "
+  ++§string.intToString(robot.payload)
+  ++" | next_order: "
+  ++packetOrderSummary(
+    orders,
+    robot.id
+  )
+
+λrobotLines(orders:[µRobotOrder],robots:[µRobotState])=>[String] match robots{
+  []=>["- none"]|
+  _=>robots map (λ(robot:µRobotState)=>String=robotLine(
+    orders,
+    robot
+  ))
+}
+
+λroomIdLabel(roomId:µRoomId)=>String match roomId{
+  µRoomId(value)=>value
+}
+
+λroomKindLabel(kind:µRoomKind)=>String match kind{
+  µDucts()=>"ducts"|
+  µLab()=>"lab"|
+  µLoadingDock()=>"loading_dock"|
+  µLobby()=>"lobby"|
+  µServerRoom()=>"server_room"|
+  µServiceCorridor()=>"service_corridor"|
+  µVault()=>"vault"
+}
+
+λroomLine(room:µRoomState)=>String="- "
+  ++room.label
+  ++" | kind: "
+  ++roomKindLabel(room.roomKind)
+  ++" | tiles: "
+  ++§string.intToString(#room.tiles)
+
+λroomLines(rooms:[µRoomState])=>[String] match rooms{
+  []=>["- none"]|
+  _=>rooms map (λ(room:µRoomState)=>String=roomLine(room))
+}
+
+λsecurityEntityLine(entity:µSecurityEntity)=>String="- id: "
+  ++entity.entityId
+  ++" | kind: "
+  ++securityKindLabel(entity.kind)
+  ++" | position: "
+  ++positionLabel(entity.position)
+  ++" | label: "
+  ++entity.label
+
+λsecurityEntityLines(entities:[µSecurityEntity])=>[String] match entities{
+  []=>["- none"]|
+  _=>entities map (λ(entity:µSecurityEntity)=>String=securityEntityLine(entity))
+}
+
+λsecurityKindLabel(kind:µSecurityEntityKind)=>String match kind{
+  µCamera()=>"camera"|
+  µGuard()=>"guard"|
+  µSecurityDrone()=>"security_drone"
+}
+
+λsignalStatusLabel(signal:Int)=>String match signal≥90{
+  true=>"relay_online"|
+  false=>match signal≥75{
+    true=>"stable"|
+    false=>match signal≥60{
+      true=>"steady"|
+      false=>match signal≥40{
+        true=>"degraded"|
+        false=>"critical"
+      }
+    }
+  }
+}
+
+λtacticalSnapshotPacket(state:µGameState)=>µPacketSummary={
+  body:joinLines([
+    "TACTICAL SNAPSHOT",
+    "",
+    "packet_type: tactical_snapshot",
+    "objective_located: "++boolLabel(state.activeMission.objective.located),
+    "objective_secured_by: "++objectiveOwnerLabel(state.activeMission.objective),
+    "objective_extracted: "++boolLabel(state.activeMission.objective.extracted),
+    "queued_orders: "++§string.intToString(#state.activeMission.orders),
+    "pending_interrupts: "++§string.intToString(#state.activeMission.interrupts),
+    "robots:"
+  ]
+    ⧺robotLines(
+      state.activeMission.orders,
+      state.activeMission.robots
+    )
+    ⧺[
+      "",
+      "interrupt_queue:"
+    ]
+    ⧺interruptLines(state.activeMission.interrupts)),
+  id:"tactical-snapshot",
+  label:"Tactical Snapshot"
+}
+
+λtelemetryPacket(state:µGameState)=>µPacketSummary={
+  body:joinLines([
+    "TELEMETRY",
+    "",
+    "packet_type: telemetry",
+    "seed: "++§string.intToString(state.seed),
+    "turn: "++§string.intToString(state.turn),
+    "board_size: "++boardSizeLabel(state.activeMission.facility),
+    "room_count: "++§string.intToString(#state.activeMission.facility.rooms),
+    "security_count: "++§string.intToString(#state.activeMission.facility.security),
+    "robot_count: "++§string.intToString(#state.activeMission.robots),
+    "queued_orders: "++§string.intToString(#state.activeMission.orders),
+    "payload_units: "++§string.intToString(payloadUnits(state.activeMission.robots)),
+    "total_battery: "++§string.intToString(totalBattery(state.activeMission.robots)),
+    "lowest_battery_robot: "++lowestBatterySummary(state.activeMission.robots),
+    "lowest_signal_robot: "++lowestSignalSummary(state.activeMission.robots),
+    "rooms:"
+  ]
+    ⧺roomLines(state.activeMission.facility.rooms)
+    ⧺[
+      "",
+      "security:"
+    ]
+    ⧺securityEntityLines(state.activeMission.facility.security)),
+  id:"telemetry",
+  label:"Telemetry"
+}
+
+λterminalIdLabel(terminalId:µTerminalId)=>String match terminalId{
+  µTerminalId(value)=>value
+}
+
+λtotalBattery(robots:[µRobotState])=>Int=robots reduce (λ(total:Int,robot:µRobotState)=>Int=total+robot.battery) from 0

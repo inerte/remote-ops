@@ -1,0 +1,13 @@
+λmain()=>Unit=()
+
+test "initial game state has four robots" {
+  •gameState.rosterCount(•gameState.initialGameState())=4
+}
+
+test "initial game state has four queued orders" {
+  •gameState.orderCount(•gameState.initialGameState())=4
+}
+
+test "initial facility includes seven rooms" {
+  •gameState.facilityRoomCount(•gameState.initialGameState())=7
+}

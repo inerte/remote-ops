@@ -1,0 +1,227 @@
+t AlarmLevel=AlarmCounterOperatorTrace()|AlarmLocal()|AlarmLockdown()|AlarmNormal()|AlarmSearch()|AlarmSuspicion()|AlarmTacticalResponse()
+
+t AppBootstrap={
+  board:BoardSummary,
+  mission:MissionSummary,
+  nextSteps:[String],
+  packets:[PacketSummary],
+  robots:[RobotSummary],
+  tagline:String,
+  title:String
+}
+
+t BoardSummary={
+  height:Int,
+  width:Int
+}
+
+t CampaignState={
+  availableContracts:[ContractSummary],
+  completedContracts:[ContractId],
+  heat:Int,
+  warehouse:WarehouseState
+}
+
+t ContractId=ContractId(String)
+
+t ContractSummary={
+  contractId:ContractId,
+  corporation:CorporationId,
+  label:String,
+  objective:ObjectiveKind
+}
+
+t CorporationId=CorporationId(String)
+
+t DoorId=DoorId(String)
+
+t EventEntry={
+  message:String,
+  turn:Int
+}
+
+t FacilityState={
+  height:Int,
+  rooms:[RoomState],
+  security:[SecurityEntity],
+  tiles:[FacilityTile],
+  width:Int
+}
+
+t FacilityTile={
+  kind:FacilityTileKind,
+  position:Position,
+  revealed:Bool,
+  walkable:Bool
+}
+
+t FacilityTileKind=DuctTile()|DoorTile(DoorId)|EntryTile()|FloorTile()|ObjectiveTile(ObjectiveId)|RelayTile()|TerminalTile(TerminalId)|WallTile()
+
+t GameState={
+  activeMission:MissionState,
+  campaign:CampaignState,
+  eventLog:[EventEntry],
+  schemaVersion:Int,
+  seed:Int,
+  turn:Int
+}
+
+t SaveFile={
+  gameVersion:String,
+  savedAt:String,
+  schemaVersion:Int,
+  state:GameState
+}
+
+t Interrupt=AlarmChanged(AlarmLevel)|CameraDetectedRobot(
+  RobotId,
+  String
+)|EnemySpotted(
+  RobotId,
+  String
+)|NewRoomRevealed(RoomId)|ObjectiveFound(ObjectiveId)|InterruptOrderCompleted(RobotId)|InterruptOrderFailed(
+  RobotId,
+  String
+)|RobotDamaged(
+  RobotId,
+  Int
+)|RouteBlocked(RobotId)|SignalLost(RobotId)|TraceThresholdCrossed(Int)
+
+t InventoryItem={
+  label:String,
+  partType:RobotPartType,
+  quantity:Int
+}
+
+t MissionSummary={
+  alarmLevel:String,
+  corporation:String,
+  missionClock:String,
+  objective:String,
+  trace:Int
+}
+
+t MissionId=MissionId(String)
+
+t MissionState={
+  alarmLevel:AlarmLevel,
+  contract:ContractSummary,
+  exposure:Int,
+  facility:FacilityState,
+  interrupts:[Interrupt],
+  missionClock:Int,
+  objective:ObjectiveState,
+  orders:[RobotOrder],
+  robots:[RobotState],
+  status:MissionStatus,
+  trace:Int
+}
+
+t MissionStatus=MissionAborted()|MissionExtracted()|MissionFailed(String)|MissionInProgress()
+
+t ObjectiveId=ObjectiveId(String)
+
+t ObjectiveKind=PhotographPrototypeBattery()|StealPrototypeBattery()
+
+t ObjectiveState={
+  extracted:Bool,
+  kind:ObjectiveKind,
+  located:Bool,
+  objectiveId:ObjectiveId,
+  securedBy:Option[RobotId]
+}
+
+t Order=AbortMission()|Extract()|Follow(RobotId)|Hack(TerminalId)|Hold()|Interact(ObjectiveId)|MoveTo(Position)|ReturnToRelay()|Scan()
+
+t OrderStatus=OrderBlocked(Interrupt)|OrderComplete()|OrderFailed(String)|OrderInterrupted(Interrupt)|OrderQueued()|OrderRunning()
+
+t PacketSummary={
+  body:String,
+  id:String,
+  label:String
+}
+
+t Position={
+  x:Int,
+  y:Int
+}
+
+t RoomId=RoomId(String)
+
+t RoomKind=Ducts()|Lab()|LoadingDock()|Lobby()|ServerRoom()|ServiceCorridor()|Vault()
+
+t RoomState={
+  label:String,
+  roomId:RoomId,
+  roomKind:RoomKind,
+  tiles:[Position]
+}
+
+t ReplayAction=ReplayAcknowledgeInterrupts()|ReplayQueueOrder(
+  RobotId,
+  Order
+)
+
+t ReplayLog={
+  contractId:ContractId,
+  initialSeed:Int,
+  schemaVersion:Int,
+  steps:[ReplayStep]
+}
+
+t ReplayStep={
+  action:ReplayAction,
+  turn:Int
+}
+
+t RobotArchetype=AtlasBreacher()|GeckoMicrocrawler()|MiraServiceAndroid()|WispRelayDrone()
+
+t RobotId=RobotId(String)
+
+t RobotOrder={
+  assignedRobot:RobotId,
+  order:Order,
+  status:OrderStatus
+}
+
+t RobotPartType=ArmorPlate()|BasicHackingModule()|BatteryPack()|CargoClamp()|EmpCharge()|FiberCamera()|LockpickArm()|RepairKit()|SignalRelay()|SpoofedServiceBadge()|Taser()|ThermalDampener()
+
+t RobotState={
+  archetype:RobotArchetype,
+  battery:Int,
+  damage:Int,
+  id:RobotId,
+  locationLabel:String,
+  name:String,
+  parts:[RobotPartType],
+  payload:Int,
+  position:Position,
+  signal:Int
+}
+
+t RobotSummary={
+  archetype:String,
+  battery:Int,
+  id:String,
+  locationLabel:String,
+  name:String,
+  position:Position,
+  signal:String
+}
+
+t SecurityEntity={
+  entityId:String,
+  kind:SecurityEntityKind,
+  label:String,
+  position:Position
+}
+
+t SecurityEntityKind=Camera()|Guard()|SecurityDrone()
+
+t TerminalId=TerminalId(String)
+
+t WarehouseState={
+  destroyedRobots:[RobotId],
+  inventory:[InventoryItem],
+  robots:[RobotState]
+}
