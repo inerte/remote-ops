@@ -3,8 +3,17 @@ import {
   loadHydratedShell,
   runAcknowledgeShell,
   runAdvanceShell,
+  runQueueOrder,
   runResetShell,
 } from './app/bootstrap'
+import {
+  createOrderDraft,
+  buildBrowserOrderCommand,
+  orderTypeDescription,
+  orderTypeNeedsPosition,
+  orderTypeNeedsTargetRobot,
+  type BrowserShellOrderType,
+} from './app/orders'
 import { validateAutosavePayload } from './app/autosave'
 import type { AppBootstrap } from './app/types'
 import { createBoard } from './renderer/board'
@@ -105,6 +114,35 @@ const loadInitialShell = async (): Promise<AppBootstrap> => {
   return loadHydratedShell(storedAutosave)
 }
 
+const createDefaultOrderStatus = (shell: AppBootstrap): StatusMessage => ({
+  state: 'idle',
+  text: shell.controls.canQueueOrders
+    ? 'Choose a robot, queue a high-level order, then advance the deterministic shell.'
+    : 'High-level order entry unlocks once interrupts are cleared and the mission is still active.',
+})
+
+const createQueuedOrderStatus = (shell: AppBootstrap): StatusMessage => {
+  const latestEvent = shell.eventLog.at(-1)?.message
+  if (latestEvent?.startsWith('Order rejected:')) {
+    return {
+      state: 'error',
+      text: latestEvent,
+    }
+  }
+
+  if (latestEvent?.startsWith('Operator queued order:')) {
+    return {
+      state: 'success',
+      text: latestEvent,
+    }
+  }
+
+  return {
+    state: 'success',
+    text: 'Order request resolved and the canonical autosave was refreshed.',
+  }
+}
+
 const main = async (): Promise<void> => {
   const app = document.querySelector<HTMLDivElement>('#app')
   if (app === null) {
@@ -113,16 +151,39 @@ const main = async (): Promise<void> => {
 
   let boardApp: BoardHandle | null = null
   let shell = await loadInitialShell()
+  let orderDraft = createOrderDraft(shell)
+  let orderStatus = createDefaultOrderStatus(shell)
   let saveStatus = createSaveStatus(shell.autosave)
 
   const render = async (): Promise<void> => {
     boardApp?.destroy()
 
-    const layout = renderLayout(app, shell)
+    orderDraft = createOrderDraft(shell, orderDraft)
+    const layout = renderLayout(app, shell, orderDraft)
     boardApp = await createBoard(layout.boardHost, shell.board, shell.robots)
 
     setStatus(layout.actionStatus, shell.controls.status, 'idle')
+    setStatus(layout.orderStatus, orderStatus.text, orderStatus.state)
     setStatus(layout.saveStatus, saveStatus.text, saveStatus.state)
+
+    const syncOrderForm = (): void => {
+      const orderType = layout.orderTypeField.value as BrowserShellOrderType
+      layout.orderFollowField.hidden = orderTypeNeedsTargetRobot(orderType) === false
+      layout.orderMoveFields.hidden = orderTypeNeedsPosition(orderType) === false
+      layout.orderHint.textContent = orderTypeDescription(orderType)
+      layout.orderSubmitButton.disabled = shell.controls.canQueueOrders === false
+    }
+
+    const refreshDraftFromLayout = (): void => {
+      orderDraft = createOrderDraft(shell, {
+        ...orderDraft,
+        moveX: layout.orderMoveXField.value,
+        moveY: layout.orderMoveYField.value,
+        orderType: layout.orderTypeField.value as BrowserShellOrderType,
+        robotId: layout.orderRobotField.value,
+        targetRobotId: layout.orderTargetField.value,
+      })
+    }
 
     const runWorldAction = async (
       operation: () => Promise<AppBootstrap>,
@@ -132,6 +193,8 @@ const main = async (): Promise<void> => {
 
       try {
         shell = await operation()
+        orderDraft = createOrderDraft(shell, orderDraft)
+        orderStatus = createDefaultOrderStatus(shell)
         saveStatus = createSaveStatus(shell.autosave)
         await render()
       } catch (error: unknown) {
@@ -188,6 +251,8 @@ const main = async (): Promise<void> => {
         try {
           await validateAutosavePayload(autosave)
           shell = await loadHydratedShell(autosave)
+          orderDraft = createOrderDraft(shell, orderDraft)
+          orderStatus = createDefaultOrderStatus(shell)
           saveStatus = createSaveStatus(
             shell.autosave,
             'Autosave payload restored into the deterministic shell.',
@@ -199,6 +264,53 @@ const main = async (): Promise<void> => {
             `Unable to restore autosave payload: ${formatError(error)}`,
             'error',
           )
+        }
+      })()
+    })
+
+    layout.orderRobotField.addEventListener('change', () => {
+      refreshDraftFromLayout()
+      layout.orderTargetField.value = orderDraft.targetRobotId
+      syncOrderForm()
+    })
+
+    layout.orderTypeField.addEventListener('change', () => {
+      refreshDraftFromLayout()
+      layout.orderTargetField.value = orderDraft.targetRobotId
+      syncOrderForm()
+    })
+
+    layout.orderTargetField.addEventListener('change', () => {
+      refreshDraftFromLayout()
+    })
+
+    layout.orderMoveXField.addEventListener('input', () => {
+      refreshDraftFromLayout()
+    })
+
+    layout.orderMoveYField.addEventListener('input', () => {
+      refreshDraftFromLayout()
+    })
+
+    layout.orderForm.addEventListener('submit', (event) => {
+      event.preventDefault()
+
+      void (async () => {
+        refreshDraftFromLayout()
+        setStatus(layout.orderStatus, 'Queueing deterministic robot order…', 'idle')
+
+        try {
+          shell = await runQueueOrder(shell.autosave, buildBrowserOrderCommand(orderDraft))
+          orderDraft = createOrderDraft(shell, orderDraft)
+          orderStatus = createQueuedOrderStatus(shell)
+          saveStatus = createSaveStatus(shell.autosave)
+          await render()
+        } catch (error: unknown) {
+          orderStatus = {
+            state: 'error',
+            text: formatError(error),
+          }
+          setStatus(layout.orderStatus, orderStatus.text, orderStatus.state)
         }
       })()
     })
@@ -224,6 +336,8 @@ const main = async (): Promise<void> => {
           })
       })
     }
+
+    syncOrderForm()
   }
 
   await render()

@@ -1,3 +1,10 @@
+import {
+  ORDER_OPTIONS,
+  orderTypeDescription,
+  orderTypeNeedsPosition,
+  orderTypeNeedsTargetRobot,
+  type BrowserOrderDraft,
+} from '../app/orders'
 import type { AppBootstrap } from '../app/types'
 
 interface LayoutHandle {
@@ -7,6 +14,17 @@ interface LayoutHandle {
   readonly advanceButton: HTMLButtonElement
   readonly autosaveButton: HTMLButtonElement
   readonly boardHost: HTMLDivElement
+  readonly orderFollowField: HTMLDivElement
+  readonly orderForm: HTMLFormElement
+  readonly orderHint: HTMLParagraphElement
+  readonly orderMoveFields: HTMLDivElement
+  readonly orderMoveXField: HTMLInputElement
+  readonly orderMoveYField: HTMLInputElement
+  readonly orderRobotField: HTMLSelectElement
+  readonly orderStatus: HTMLParagraphElement
+  readonly orderSubmitButton: HTMLButtonElement
+  readonly orderTargetField: HTMLSelectElement
+  readonly orderTypeField: HTMLSelectElement
   readonly packetButtons: NodeListOf<HTMLButtonElement>
   readonly packetStatus: HTMLParagraphElement
   readonly resetButton: HTMLButtonElement
@@ -43,6 +61,22 @@ const interruptMarkup = (interrupt: string): string => `
   <li class="interrupt-entry">${escapeHtml(interrupt)}</li>
 `
 
+const optionMarkup = (value: string, label: string, selected: boolean): string => `
+  <option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>
+    ${escapeHtml(label)}
+  </option>
+`
+
+const orderOptionMarkup = (
+  option: (typeof ORDER_OPTIONS)[number],
+  selectedValue: BrowserOrderDraft['orderType'],
+): string => optionMarkup(option.value, option.label, option.value === selectedValue)
+
+const robotOptionMarkup = (
+  robot: AppBootstrap['robots'][number],
+  selectedRobotId: string,
+): string => optionMarkup(robot.id, `${robot.name} · ${robot.id}`, robot.id === selectedRobotId)
+
 const robotMarkup = (robot: AppBootstrap['robots'][number]): string => `
   <article class="robot-card">
     <div class="robot-card__header">
@@ -78,7 +112,10 @@ const packetMarkup = (packet: AppBootstrap['packets'][number]): string => `
 export const renderLayout = (
   container: HTMLElement,
   bootstrap: AppBootstrap,
+  orderDraft: BrowserOrderDraft,
 ): LayoutHandle => {
+  const followTargets = bootstrap.robots.filter((robot) => robot.id !== orderDraft.robotId)
+
   container.innerHTML = `
     <div class="shell">
       <header class="shell__header">
@@ -169,8 +206,91 @@ export const renderLayout = (
                 bootstrap.controls.canReset === false,
               )}
             </div>
-            <p class="action-status" data-action-status>
-              ${escapeHtml(bootstrap.controls.status)}
+              <p class="action-status" data-action-status>
+                ${escapeHtml(bootstrap.controls.status)}
+              </p>
+            </section>
+
+          <section class="panel">
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">High-level orders</p>
+                <h2>Queue robot action</h2>
+              </div>
+            </div>
+            <form class="order-form" data-order-form>
+              <div class="order-form__grid">
+                <label class="field">
+                  <span class="field__label">Robot</span>
+                  <select class="field__control" data-order-robot>
+                    ${bootstrap.robots
+                      .map((robot) => robotOptionMarkup(robot, orderDraft.robotId))
+                      .join('')}
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field__label">Order</span>
+                  <select class="field__control" data-order-type>
+                    ${ORDER_OPTIONS.map((option) => orderOptionMarkup(option, orderDraft.orderType)).join('')}
+                  </select>
+                </label>
+              </div>
+              <div class="field" data-order-follow-field${orderTypeNeedsTargetRobot(orderDraft.orderType) ? '' : ' hidden'}>
+                <label class="field__stack">
+                  <span class="field__label">Follow target</span>
+                  <select class="field__control" data-order-target>
+                    ${followTargets
+                      .map((robot) => robotOptionMarkup(robot, orderDraft.targetRobotId))
+                      .join('')}
+                  </select>
+                </label>
+              </div>
+              <div class="order-form__grid" data-order-move-fields${orderTypeNeedsPosition(orderDraft.orderType) ? '' : ' hidden'}>
+                <label class="field">
+                  <span class="field__label">Grid X</span>
+                  <input
+                    class="field__control"
+                    data-order-move-x
+                    inputmode="numeric"
+                    max="${bootstrap.board.width - 1}"
+                    min="0"
+                    type="number"
+                    value="${escapeHtml(orderDraft.moveX)}"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field__label">Grid Y</span>
+                  <input
+                    class="field__control"
+                    data-order-move-y
+                    inputmode="numeric"
+                    max="${bootstrap.board.height - 1}"
+                    min="0"
+                    type="number"
+                    value="${escapeHtml(orderDraft.moveY)}"
+                  />
+                </label>
+              </div>
+              <p class="order-form__hint" data-order-hint>
+                ${escapeHtml(orderTypeDescription(orderDraft.orderType))}
+              </p>
+              <p class="packet-meta">
+                Move orders use the packet-grid coordinate system (0-based x,y) already used by
+                the deterministic shell.
+              </p>
+              <div class="save-transfer__actions">
+                <button
+                  class="action-button"
+                  data-submit-order
+                  type="submit"
+                  ${bootstrap.controls.canQueueOrders ? '' : 'disabled'}
+                >
+                  Queue selected order
+                </button>
+              </div>
+            </form>
+            <p class="action-status" data-order-status>
+              Orders queued here are appended to the deterministic mission stack.
             </p>
           </section>
 
@@ -291,6 +411,17 @@ export const renderLayout = (
   const advanceButton = container.querySelector<HTMLButtonElement>('[data-advance-shell]')
   const autosaveButton = container.querySelector<HTMLButtonElement>('[data-copy-autosave]')
   const boardHost = container.querySelector<HTMLDivElement>('[data-board-host]')
+  const orderFollowField = container.querySelector<HTMLDivElement>('[data-order-follow-field]')
+  const orderForm = container.querySelector<HTMLFormElement>('[data-order-form]')
+  const orderHint = container.querySelector<HTMLParagraphElement>('[data-order-hint]')
+  const orderMoveFields = container.querySelector<HTMLDivElement>('[data-order-move-fields]')
+  const orderMoveXField = container.querySelector<HTMLInputElement>('[data-order-move-x]')
+  const orderMoveYField = container.querySelector<HTMLInputElement>('[data-order-move-y]')
+  const orderRobotField = container.querySelector<HTMLSelectElement>('[data-order-robot]')
+  const orderStatus = container.querySelector<HTMLParagraphElement>('[data-order-status]')
+  const orderSubmitButton = container.querySelector<HTMLButtonElement>('[data-submit-order]')
+  const orderTargetField = container.querySelector<HTMLSelectElement>('[data-order-target]')
+  const orderTypeField = container.querySelector<HTMLSelectElement>('[data-order-type]')
   const packetStatus = container.querySelector<HTMLParagraphElement>('[data-packet-status]')
   const resetButton = container.querySelector<HTMLButtonElement>('[data-reset-shell]')
   const restoreAutosaveButton =
@@ -304,6 +435,17 @@ export const renderLayout = (
     advanceButton === null ||
     autosaveButton === null ||
     boardHost === null ||
+    orderFollowField === null ||
+    orderForm === null ||
+    orderHint === null ||
+    orderMoveFields === null ||
+    orderMoveXField === null ||
+    orderMoveYField === null ||
+    orderRobotField === null ||
+    orderStatus === null ||
+    orderSubmitButton === null ||
+    orderTargetField === null ||
+    orderTypeField === null ||
     packetStatus === null ||
     resetButton === null ||
     restoreAutosaveButton === null ||
@@ -319,6 +461,17 @@ export const renderLayout = (
     advanceButton,
     autosaveButton,
     boardHost,
+    orderFollowField,
+    orderForm,
+    orderHint,
+    orderMoveFields,
+    orderMoveXField,
+    orderMoveYField,
+    orderRobotField,
+    orderStatus,
+    orderSubmitButton,
+    orderTargetField,
+    orderTypeField,
     packetButtons: container.querySelectorAll<HTMLButtonElement>('[data-packet-id]'),
     packetStatus,
     resetButton,

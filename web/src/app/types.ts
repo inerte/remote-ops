@@ -11,6 +11,7 @@ export interface BoardSummary {
 export interface ControlSummary {
   readonly canAcknowledge: boolean
   readonly canAdvance: boolean
+  readonly canQueueOrders: boolean
   readonly canReset: boolean
   readonly status: string
 }

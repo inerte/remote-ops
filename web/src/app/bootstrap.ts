@@ -1,4 +1,5 @@
 import * as gameApiModule from '../generated/src/gameApi.mjs'
+import type { BrowserOrderCommand } from './orders'
 import type { AppBootstrap } from './types'
 
 interface GameApiModule {
@@ -6,6 +7,7 @@ interface GameApiModule {
   readonly advanceBrowserShell: (autosave: string) => Promise<unknown>
   readonly bootstrap: () => Promise<unknown>
   readonly hydrateBrowserShell: (autosave: string) => Promise<unknown>
+  readonly queueBrowserOrder: (autosave: string, command: BrowserOrderCommand) => Promise<unknown>
   readonly resetBrowserShell: () => Promise<unknown>
 }
 
@@ -22,6 +24,11 @@ export const runAdvanceShell = async (autosave: string): Promise<AppBootstrap> =
 
 export const runAcknowledgeShell = async (autosave: string): Promise<AppBootstrap> =>
   (await gameApi.acknowledgeBrowserShell(autosave)) as AppBootstrap
+
+export const runQueueOrder = async (
+  autosave: string,
+  command: BrowserOrderCommand,
+): Promise<AppBootstrap> => (await gameApi.queueBrowserOrder(autosave, command)) as AppBootstrap
 
 export const runResetShell = async (): Promise<AppBootstrap> =>
   (await gameApi.resetBrowserShell()) as AppBootstrap

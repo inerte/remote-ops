@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "sigil:compile": "cd .. && sigil compile src/gameApi.lib.sigil && rm -rf web/src/generated && mkdir -p web/src/generated/core web/src/generated/src web/src/generated/stdlib && cp -f .local/core/*.mjs web/src/generated/core/ && cp -f .local/src/*.mjs web/src/generated/src/ && cp -f .local/stdlib/*.mjs web/src/generated/stdlib/ && printf 'export function bootstrap(): Promise<unknown>;\\n' > web/src/generated/src/gameApi.d.mts && printf 'export function parseSaveFile(input: string): Promise<unknown>;\\n' > web/src/generated/src/saveCodecs.d.mts",
+    "sigil:compile": "cd .. && sigil compile src/gameApi.lib.sigil && rm -rf web/src/generated && mkdir -p web/src/generated/core web/src/generated/src web/src/generated/stdlib && cp -f .local/core/*.mjs web/src/generated/core/ && cp -f .local/src/*.mjs web/src/generated/src/ && cp -f .local/stdlib/*.mjs web/src/generated/stdlib/ && printf 'export function acknowledgeBrowserShell(autosave: string): Promise<unknown>;\\nexport function advanceBrowserShell(autosave: string): Promise<unknown>;\\nexport function bootstrap(): Promise<unknown>;\\nexport function hydrateBrowserShell(autosave: string): Promise<unknown>;\\nexport function queueBrowserOrder(autosave: string, command: unknown): Promise<unknown>;\\nexport function resetBrowserShell(): Promise<unknown>;\\n' > web/src/generated/src/gameApi.d.mts && printf 'export function parseSaveFile(input: string): Promise<unknown>;\\n' > web/src/generated/src/saveCodecs.d.mts",
     "sigil:test": "cd .. && sigil test",
     "dev": "npm run sigil:compile && vite",
     "build": "npm run sigil:compile && tsc && vite build",
