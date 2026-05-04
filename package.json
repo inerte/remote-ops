@@ -1,0 +1,17 @@
+{
+  "name": "remote-ops",
+  "private": true,
+  "scripts": {
+    "setup:web": "npm install --prefix web",
+    "build:web": "npm --prefix web run build",
+    "cf:dev": "npm run build:web && wrangler dev --config wrangler.jsonc",
+    "cf:deploy": "npm run build:web && wrangler deploy --config wrangler.jsonc",
+    "cf:check": "npm run build:web && wrangler deploy --dry-run --config wrangler.jsonc",
+    "tf:init": "terraform -chdir=infra/terraform init",
+    "tf:plan": "terraform -chdir=infra/terraform plan",
+    "tf:apply": "terraform -chdir=infra/terraform apply"
+  },
+  "devDependencies": {
+    "wrangler": "4.87.0"
+  }
+}

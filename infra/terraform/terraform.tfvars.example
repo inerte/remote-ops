@@ -1,0 +1,5 @@
+cloudflare_api_token = "replace-me"
+cloudflare_account_id = "replace-me"
+cloudflare_zone_id = "replace-me"
+production_hostname = "remote-ops.example.com"
+workers_script_name = "remote-ops"

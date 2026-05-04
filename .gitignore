@@ -5,3 +5,9 @@
 .beads-credential-key
 .local/
 .sigil/
+/node_modules/
+/.wrangler/
+/infra/terraform/.terraform/
+/infra/terraform/terraform.tfvars
+/infra/terraform/*.tfstate
+/infra/terraform/*.tfstate.*
