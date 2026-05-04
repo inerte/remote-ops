@@ -1,0 +1,143 @@
+λfindPacket(packetId:String,state:µGameState)=>Option[µPacketSummary]=§list.find(
+  λ(packet:µPacketSummary)=>Bool=packet.id=packetId,
+  •packetGenerator.generatePackets(state)
+)
+
+λinterruptedState()=>µGameState=•simulation.advanceOneOrder(•gameState.initialGameState())
+
+λmain()=>Unit=()
+
+λpacketBody(packetId:String,state:µGameState)=>String match findPacket(
+  packetId,
+  state
+){
+  Some(packet)=>packet.body|
+  None()=>"missing packet"
+}
+
+λprogressedState()=>µGameState=•simulation.advanceOneOrder(•simulation.acknowledgeInterrupts(interruptedState()))
+
+λsampleReplaySteps()=>[µReplayStep]=[
+  {
+    action:µReplayQueueOrder(
+      µRobotId("atlas-1"),
+      µMoveTo({
+        x:0,
+        y:4
+      })
+    ),
+    turn:1
+  },
+  {
+    action:µReplayAcknowledgeInterrupts(),
+    turn:2
+  },
+  {
+    action:µReplayQueueOrder(
+      µRobotId("wisp-1"),
+      µReturnToRelay()
+    ),
+    turn:3
+  }
+]
+
+λwithSeed(seed:Int,state:µGameState)=>µGameState={
+  activeMission:{
+    alarmLevel:state.activeMission.alarmLevel,
+    contract:state.activeMission.contract,
+    exposure:state.activeMission.exposure,
+    facility:•facilityGenerator.generateFacilityState(seed),
+    interrupts:state.activeMission.interrupts,
+    missionClock:state.activeMission.missionClock,
+    objective:state.activeMission.objective,
+    orders:state.activeMission.orders,
+    robots:state.activeMission.robots,
+    status:state.activeMission.status,
+    trace:state.activeMission.trace
+  },
+  campaign:state.campaign,
+  eventLog:state.eventLog,
+  schemaVersion:state.schemaVersion,
+  seed:seed,
+  turn:state.turn
+}
+
+test "same seed reproduces the exact facility layout" {
+  •facilityGenerator.generateFacilityState(1338)=•facilityGenerator.generateFacilityState(1338)
+}
+
+test "simulation progression is repeatable from the same initial state" {
+  progressedState()=progressedState() and •simulation.resumeUntilInterrupt(
+    4,
+    •gameState.initialGameState()
+  )=•simulation.resumeUntilInterrupt(
+    4,
+    •gameState.initialGameState()
+  )
+}
+
+test "different seeds diverge in facility-sensitive packets" {
+  l base=(•gameState.initialGameState():µGameState);
+  l seed1338=(withSeed(
+    1338,
+    base
+  ):µGameState);
+  l seed1339=(withSeed(
+    1339,
+    base
+  ):µGameState);
+  packetBody(
+    "telemetry",
+    seed1338
+  )≠packetBody(
+    "telemetry",
+    seed1339
+  ) and packetBody(
+    "mission-brief",
+    seed1338
+  )≠packetBody(
+    "mission-brief",
+    seed1339
+  )
+}
+
+test "advanceOneOrder is stable while interrupts are pending" {
+  l interrupted=(interruptedState():µGameState);
+  •simulation.advanceOneOrder(interrupted)=interrupted and •packetGenerator.generatePackets(•simulation.advanceOneOrder(interrupted))=•packetGenerator.generatePackets(interrupted)
+}
+
+test "save roundtrips preserve progressed state and packets" {
+  l progressed=(progressedState():µGameState);
+  l save=(•saveApi.createSaveFile(
+    "prototype",
+    "2026-05-04T16:15:00Z",
+    progressed
+  ):µSaveFile);
+  l text=(•saveCodecs.stringifySaveFile(save):String);
+  match •saveCodecs.parseSaveFile(text){
+    Ok(parsed)=>parsed=save
+      and •saveCodecs.stringifySaveFile(parsed)=text
+      and •packetGenerator.generatePackets(•saveApi.loadGameState(parsed))=•packetGenerator.generatePackets(progressed)|
+    Err(_)=>false
+  }
+}
+
+test "replay helpers preserve exact seeded data" {
+  l seeded=(withSeed(
+    1338,
+    progressedState()
+  ):µGameState);
+  l replay=(•saveApi.createReplayLog(
+    seeded,
+    sampleReplaySteps()
+  ):µReplayLog);
+  l text=(•saveCodecs.stringifyReplayLog(replay):String);
+  match •saveCodecs.parseReplayLog(text){
+    Ok(parsed)=>parsed=replay
+      and parsed.initialSeed=1338
+      and parsed.contractId=seeded.activeMission.contract.contractId
+      and parsed.steps=sampleReplaySteps()
+      and •saveCodecs.stringifyReplayLog(parsed)=text|
+    Err(_)=>false
+  }
+}
