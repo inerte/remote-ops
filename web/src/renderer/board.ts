@@ -98,6 +98,66 @@ const tileDetailLabel = (tile: BoardTileSummary | undefined): string => {
   return tile.revealed ? tile.label : `${tile.label} · obscured`
 }
 
+const tileKindLabel = (kind: BoardTileKind): string => {
+  switch (kind) {
+    case 'duct':
+      return 'Access duct'
+    case 'door':
+      return 'Security door'
+    case 'entry':
+      return 'Entry point'
+    case 'floor':
+      return 'Operational floor'
+    case 'objective':
+      return 'Mission objective'
+    case 'relay':
+      return 'Relay node'
+    case 'terminal':
+      return 'Network terminal'
+    case 'wall':
+      return 'Structural wall'
+  }
+}
+
+const tileVisibilityLabel = (tile: BoardTileSummary): string => (tile.revealed ? 'Revealed' : 'Obscured')
+
+const tileAccessLabel = (tile: BoardTileSummary): string => {
+  if (tile.kind === 'wall') {
+    return 'Impassable'
+  }
+
+  return tile.walkable ? 'Walkable' : 'Blocked'
+}
+
+const tileTacticalNote = (tile: BoardTileSummary): string => {
+  switch (tile.kind) {
+    case 'duct':
+      return tile.revealed
+        ? 'Low-profile route for covert repositioning and microcrawler movement.'
+        : 'A concealed access route is present, but current intel is incomplete.'
+    case 'door':
+      return tile.walkable
+        ? 'This choke point is currently open for route planning.'
+        : 'Movement stalls here until the crew opens, bypasses, or breaches the door.'
+    case 'entry':
+      return 'Primary insertion or fallback extraction lane for the operation.'
+    case 'floor':
+      return tile.revealed
+        ? 'Known traversable interior space for safe operator routing.'
+        : 'Interior route exists here, but the tactical picture is still incomplete.'
+    case 'objective':
+      return tile.revealed
+        ? 'Mission-critical asset location once the crew can secure it.'
+        : 'Objective signature is flagged here, but the exact state remains obscured.'
+    case 'relay':
+      return 'Signal anchor point for keeping remote units online and coordinated.'
+    case 'terminal':
+      return 'Network access point for hacks, intel pulls, or subsystem control.'
+    case 'wall':
+      return 'Hard structural boundary; plan routes around it.'
+  }
+}
+
 const drawFrame = (
   stage: Container,
   originX: number,
@@ -347,6 +407,9 @@ export const createBoard = async (
     resizeTo: wrapper,
   })
 
+  const tileLayer = document.createElement('div')
+  tileLayer.className = 'board-tile-layer'
+
   const robotLayer = document.createElement('div')
   robotLayer.className = 'board-robot-layer'
 
@@ -354,7 +417,7 @@ export const createBoard = async (
   tooltip.className = 'board-tooltip'
   tooltip.setAttribute('aria-live', 'polite')
 
-  wrapper.append(app.canvas, robotLayer, tooltip)
+  wrapper.append(app.canvas, tileLayer, robotLayer, tooltip)
 
   const stage = new Container()
   app.stage.addChild(stage)
@@ -396,7 +459,7 @@ export const createBoard = async (
   stage.addChild(legend)
 
   const hint = new Text({
-    text: 'Hover or focus robot markers for uplink details',
+    text: 'Hover or focus tiles and robot markers for tactical intel',
     style: {
       fill: '#8ba4d0',
       fontFamily: 'IBM Plex Mono, ui-monospace, monospace',
@@ -422,18 +485,47 @@ export const createBoard = async (
 
   let activeHotspot: HTMLButtonElement | null = null
 
-  const showTooltip = (
+  const positionTooltip = (centerX: number, centerY: number): void => {
+    const maxWidth = Math.min(260, wrapper.clientWidth - TOOLTIP_EDGE_PADDING * 2)
+    tooltip.style.maxWidth = `${maxWidth}px`
+
+    const tooltipWidth = tooltip.offsetWidth
+    const tooltipHeight = tooltip.offsetHeight
+    const left = clamp(
+      centerX - tooltipWidth / 2,
+      TOOLTIP_EDGE_PADDING,
+      Math.max(TOOLTIP_EDGE_PADDING, wrapper.clientWidth - tooltipWidth - TOOLTIP_EDGE_PADDING),
+    )
+    const preferredTop = centerY - tooltipHeight - TOOLTIP_OFFSET
+    const top = clamp(
+      preferredTop >= TOOLTIP_EDGE_PADDING ? preferredTop : centerY + TOOLTIP_OFFSET,
+      TOOLTIP_EDGE_PADDING,
+      Math.max(TOOLTIP_EDGE_PADDING, wrapper.clientHeight - tooltipHeight - TOOLTIP_EDGE_PADDING),
+    )
+
+    tooltip.style.left = `${Math.round(left)}px`
+    tooltip.style.top = `${Math.round(top)}px`
+  }
+
+  const showTooltip = (content: string, centerX: number, centerY: number, hotspot: HTMLButtonElement): void => {
+    activeHotspot?.removeAttribute('data-active')
+    hotspot.dataset.active = 'true'
+    activeHotspot = hotspot
+
+    tooltip.innerHTML = content
+    tooltip.dataset.visible = 'true'
+    positionTooltip(centerX, centerY)
+  }
+
+  const showRobotTooltip = (
     robot: RobotSummary,
     tile: BoardTileSummary | undefined,
     centerX: number,
     centerY: number,
     hotspot: HTMLButtonElement,
   ): void => {
-    activeHotspot?.removeAttribute('data-active')
-    hotspot.dataset.active = 'true'
-    activeHotspot = hotspot
-
-    tooltip.innerHTML = `
+    showTooltip(
+      `
       <div class="board-tooltip__header">
         <div>
           <p class="board-tooltip__eyebrow">Uplink · ${escapeHtml(robot.id)}</p>
@@ -460,28 +552,52 @@ export const createBoard = async (
           <dd>${escapeHtml(tileDetailLabel(tile))}</dd>
         </div>
       </dl>
-    `
-    tooltip.dataset.visible = 'true'
-
-    const maxWidth = Math.min(260, wrapper.clientWidth - TOOLTIP_EDGE_PADDING * 2)
-    tooltip.style.maxWidth = `${maxWidth}px`
-
-    const tooltipWidth = tooltip.offsetWidth
-    const tooltipHeight = tooltip.offsetHeight
-    const left = clamp(
-      centerX - tooltipWidth / 2,
-      TOOLTIP_EDGE_PADDING,
-      Math.max(TOOLTIP_EDGE_PADDING, wrapper.clientWidth - tooltipWidth - TOOLTIP_EDGE_PADDING),
+    `,
+      centerX,
+      centerY,
+      hotspot,
     )
-    const preferredTop = centerY - tooltipHeight - TOOLTIP_OFFSET
-    const top = clamp(
-      preferredTop >= TOOLTIP_EDGE_PADDING ? preferredTop : centerY + TOOLTIP_OFFSET,
-      TOOLTIP_EDGE_PADDING,
-      Math.max(TOOLTIP_EDGE_PADDING, wrapper.clientHeight - tooltipHeight - TOOLTIP_EDGE_PADDING),
-    )
+  }
 
-    tooltip.style.left = `${Math.round(left)}px`
-    tooltip.style.top = `${Math.round(top)}px`
+  const showTileTooltip = (
+    tile: BoardTileSummary,
+    centerX: number,
+    centerY: number,
+    hotspot: HTMLButtonElement,
+  ): void => {
+    showTooltip(
+      `
+      <div class="board-tooltip__header">
+        <div>
+          <p class="board-tooltip__eyebrow">Tile intel · ${tile.position.x}, ${tile.position.y}</p>
+          <h3 class="board-tooltip__title">${escapeHtml(tile.label)}</h3>
+          <p class="board-tooltip__subtitle">${escapeHtml(tileKindLabel(tile.kind))}</p>
+        </div>
+        <span class="board-tooltip__status">${escapeHtml(tileVisibilityLabel(tile))}</span>
+      </div>
+      <dl class="board-tooltip__stats">
+        <div>
+          <dt>Access</dt>
+          <dd>${escapeHtml(tileAccessLabel(tile))}</dd>
+        </div>
+        <div>
+          <dt>Grid</dt>
+          <dd>${tile.position.x}, ${tile.position.y}</dd>
+        </div>
+        <div>
+          <dt>Type</dt>
+          <dd>${escapeHtml(tileKindLabel(tile.kind))}</dd>
+        </div>
+        <div class="board-tooltip__stat board-tooltip__stat--full">
+          <dt>Tactical note</dt>
+          <dd>${escapeHtml(tileTacticalNote(tile))}</dd>
+        </div>
+      </dl>
+    `,
+      centerX,
+      centerY,
+      hotspot,
+    )
   }
 
   const hideTooltip = (hotspot: HTMLButtonElement): void => {
@@ -496,6 +612,38 @@ export const createBoard = async (
     hotspot.removeAttribute('data-active')
     activeHotspot = null
     tooltip.dataset.visible = 'false'
+  }
+
+  for (const tile of board.tiles) {
+    const centerX = originX + tile.position.x * tileSize + tileSize / 2
+    const centerY = originY + tile.position.y * tileSize + tileSize / 2
+
+    const hotspot = document.createElement('button')
+    hotspot.type = 'button'
+    hotspot.className = 'board-tile-hotspot'
+    hotspot.style.left = `${Math.round(centerX)}px`
+    hotspot.style.top = `${Math.round(centerY)}px`
+    hotspot.style.width = `${tileSizeInner}px`
+    hotspot.style.height = `${tileSizeInner}px`
+    hotspot.setAttribute(
+      'aria-label',
+      `${tile.label}, ${tileKindLabel(tile.kind)}, ${tileVisibilityLabel(tile).toLowerCase()}, grid ${tile.position.x}, ${tile.position.y}`,
+    )
+
+    hotspot.addEventListener('pointerenter', () => {
+      showTileTooltip(tile, centerX, centerY, hotspot)
+    })
+    hotspot.addEventListener('focus', () => {
+      showTileTooltip(tile, centerX, centerY, hotspot)
+    })
+    hotspot.addEventListener('pointerleave', () => {
+      hideTooltip(hotspot)
+    })
+    hotspot.addEventListener('blur', () => {
+      hideTooltip(hotspot)
+    })
+
+    tileLayer.appendChild(hotspot)
   }
 
   for (const robot of robots) {
@@ -564,10 +712,10 @@ export const createBoard = async (
     const tile = tileLookup.get(positionKey(robot.position.x, robot.position.y))
 
     hotspot.addEventListener('pointerenter', () => {
-      showTooltip(robot, tile, centerX, centerY, hotspot)
+      showRobotTooltip(robot, tile, centerX, centerY, hotspot)
     })
     hotspot.addEventListener('focus', () => {
-      showTooltip(robot, tile, centerX, centerY, hotspot)
+      showRobotTooltip(robot, tile, centerX, centerY, hotspot)
     })
     hotspot.addEventListener('pointerleave', () => {
       hideTooltip(hotspot)
