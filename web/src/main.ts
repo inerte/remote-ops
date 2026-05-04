@@ -5,6 +5,7 @@ import {
   runAdvanceShell,
   runResetShell,
 } from './app/bootstrap'
+import { validateAutosavePayload } from './app/autosave'
 import type { AppBootstrap } from './app/types'
 import { createBoard } from './renderer/board'
 import './styles/app.css'
@@ -80,6 +81,21 @@ const persistAutosave = (autosave: string): StatusMessage => {
   }
 }
 
+const createSaveStatus = (
+  autosave: string,
+  successText?: string,
+): StatusMessage => {
+  const persistStatus = persistAutosave(autosave)
+  if (successText === undefined || persistStatus.state === 'error') {
+    return persistStatus
+  }
+
+  return {
+    state: 'success',
+    text: `${successText} ${persistStatus.text}`,
+  }
+}
+
 const loadInitialShell = async (): Promise<AppBootstrap> => {
   const storedAutosave = readStoredAutosave()
   if (storedAutosave === null) {
@@ -97,7 +113,7 @@ const main = async (): Promise<void> => {
 
   let boardApp: BoardHandle | null = null
   let shell = await loadInitialShell()
-  let exportStatus = persistAutosave(shell.autosave)
+  let saveStatus = createSaveStatus(shell.autosave)
 
   const render = async (): Promise<void> => {
     boardApp?.destroy()
@@ -106,7 +122,7 @@ const main = async (): Promise<void> => {
     boardApp = await createBoard(layout.boardHost, shell.board, shell.robots)
 
     setStatus(layout.actionStatus, shell.controls.status, 'idle')
-    setStatus(layout.packetStatus, exportStatus.text, exportStatus.state)
+    setStatus(layout.saveStatus, saveStatus.text, saveStatus.state)
 
     const runWorldAction = async (
       operation: () => Promise<AppBootstrap>,
@@ -116,7 +132,7 @@ const main = async (): Promise<void> => {
 
       try {
         shell = await operation()
-        exportStatus = persistAutosave(shell.autosave)
+        saveStatus = createSaveStatus(shell.autosave)
         await render()
       } catch (error: unknown) {
         setStatus(layout.actionStatus, formatError(error), 'error')
@@ -144,11 +160,47 @@ const main = async (): Promise<void> => {
     layout.autosaveButton.addEventListener('click', () => {
       void copyText(shell.autosave)
         .then(() => {
-          setStatus(layout.packetStatus, 'Autosave payload copied to the clipboard.', 'success')
+          setStatus(
+            layout.packetStatus,
+            'Current autosave payload copied to the clipboard.',
+            'success',
+          )
         })
         .catch((error: unknown) => {
           setStatus(layout.packetStatus, formatError(error), 'error')
         })
+    })
+
+    layout.restoreAutosaveButton.addEventListener('click', () => {
+      void (async () => {
+        const autosave = layout.autosaveField.value.trim()
+        if (autosave.length === 0) {
+          setStatus(
+            layout.saveStatus,
+            'Paste a canonical autosave payload before restoring the shell.',
+            'error',
+          )
+          return
+        }
+
+        setStatus(layout.saveStatus, 'Restoring pasted autosave payload…', 'idle')
+
+        try {
+          await validateAutosavePayload(autosave)
+          shell = await loadHydratedShell(autosave)
+          saveStatus = createSaveStatus(
+            shell.autosave,
+            'Autosave payload restored into the deterministic shell.',
+          )
+          await render()
+        } catch (error: unknown) {
+          setStatus(
+            layout.saveStatus,
+            `Unable to restore autosave payload: ${formatError(error)}`,
+            'error',
+          )
+        }
+      })()
     })
 
     for (const button of layout.packetButtons) {

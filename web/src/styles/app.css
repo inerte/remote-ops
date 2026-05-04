@@ -200,15 +200,56 @@ h3 {
 
 .control-actions,
 .robot-list,
-.packet-list {
+.packet-list,
+.save-transfer {
   padding: 20px;
 }
 
 .control-actions,
 .robot-list,
-.packet-list {
+.packet-list,
+.save-transfer {
   display: grid;
   gap: 12px;
+}
+
+.save-transfer__hint,
+.save-transfer__label {
+  color: #8ba4d0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.save-transfer__label {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.save-transfer__editor {
+  width: 100%;
+  min-height: 12rem;
+  padding: 12px 14px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #d8e4ff;
+  resize: vertical;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.save-transfer__editor:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.48);
+  outline-offset: 2px;
+  border-color: rgba(125, 211, 252, 0.48);
+}
+
+.save-transfer__actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .action-button,
@@ -395,5 +436,9 @@ h3 {
   .board-summary,
   .mission-meters {
     grid-template-columns: 1fr;
+  }
+
+  .save-transfer__actions {
+    display: grid;
   }
 }

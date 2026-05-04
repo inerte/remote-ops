@@ -2,6 +2,7 @@ import type { AppBootstrap } from '../app/types'
 
 interface LayoutHandle {
   readonly acknowledgeButton: HTMLButtonElement
+  readonly autosaveField: HTMLTextAreaElement
   readonly actionStatus: HTMLParagraphElement
   readonly advanceButton: HTMLButtonElement
   readonly autosaveButton: HTMLButtonElement
@@ -9,6 +10,8 @@ interface LayoutHandle {
   readonly packetButtons: NodeListOf<HTMLButtonElement>
   readonly packetStatus: HTMLParagraphElement
   readonly resetButton: HTMLButtonElement
+  readonly restoreAutosaveButton: HTMLButtonElement
+  readonly saveStatus: HTMLParagraphElement
 }
 
 const escapeHtml = (value: string): string =>
@@ -226,6 +229,43 @@ export const renderLayout = (
           <section class="panel">
             <div class="panel__header">
               <div>
+                <p class="eyebrow">Canonical autosave</p>
+                <h2>Manual save / restore</h2>
+              </div>
+            </div>
+            <div class="save-transfer">
+              <p class="save-transfer__hint">
+                The current autosave payload is mirrored here for manual backup or paste
+                restore.
+              </p>
+              <label class="save-transfer__label" for="autosave-transfer-field">
+                Current deterministic payload
+              </label>
+              <textarea
+                class="save-transfer__editor"
+                data-autosave-field
+                id="autosave-transfer-field"
+                rows="8"
+                spellcheck="false"
+              >${escapeHtml(bootstrap.autosave)}</textarea>
+              <div class="save-transfer__actions">
+                <button class="action-button" data-restore-autosave type="button">
+                  Restore pasted autosave
+                </button>
+              </div>
+            </div>
+            <p class="packet-meta">
+              Restoring a payload immediately re-syncs the canonical local autosave used by the
+              browser shell.
+            </p>
+            <p class="packet-status" data-save-status>
+              Paste a canonical autosave payload here, then restore it into the browser shell.
+            </p>
+          </section>
+
+          <section class="panel">
+            <div class="panel__header">
+              <div>
                 <p class="eyebrow">Recent event log</p>
                 <h2>Mission feed</h2>
               </div>
@@ -246,27 +286,35 @@ export const renderLayout = (
 
   const acknowledgeButton =
     container.querySelector<HTMLButtonElement>('[data-acknowledge-shell]')
+  const autosaveField = container.querySelector<HTMLTextAreaElement>('[data-autosave-field]')
   const actionStatus = container.querySelector<HTMLParagraphElement>('[data-action-status]')
   const advanceButton = container.querySelector<HTMLButtonElement>('[data-advance-shell]')
   const autosaveButton = container.querySelector<HTMLButtonElement>('[data-copy-autosave]')
   const boardHost = container.querySelector<HTMLDivElement>('[data-board-host]')
   const packetStatus = container.querySelector<HTMLParagraphElement>('[data-packet-status]')
   const resetButton = container.querySelector<HTMLButtonElement>('[data-reset-shell]')
+  const restoreAutosaveButton =
+    container.querySelector<HTMLButtonElement>('[data-restore-autosave]')
+  const saveStatus = container.querySelector<HTMLParagraphElement>('[data-save-status]')
 
   if (
     acknowledgeButton === null ||
+    autosaveField === null ||
     actionStatus === null ||
     advanceButton === null ||
     autosaveButton === null ||
     boardHost === null ||
     packetStatus === null ||
-    resetButton === null
+    resetButton === null ||
+    restoreAutosaveButton === null ||
+    saveStatus === null
   ) {
     throw new Error('Failed to render the Remote Ops shell layout.')
   }
 
   return {
     acknowledgeButton,
+    autosaveField,
     actionStatus,
     advanceButton,
     autosaveButton,
@@ -274,5 +322,7 @@ export const renderLayout = (
     packetButtons: container.querySelectorAll<HTMLButtonElement>('[data-packet-id]'),
     packetStatus,
     resetButton,
+    restoreAutosaveButton,
+    saveStatus,
   }
 }
