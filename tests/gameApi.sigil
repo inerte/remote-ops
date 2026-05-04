@@ -1,4 +1,78 @@
+λdrainOrders(limit:Int,state:µGameState)=>µGameState match limit{
+  0=>state|
+  _=>match state.activeMission.interrupts{
+    []=>match state.activeMission.orders{
+      []=>state|
+      _=>drainOrders(
+        limit-1,
+        •simulation.advanceOneOrder(state)
+      )
+    }|
+    _=>drainOrders(
+      limit-1,
+      •simulation.acknowledgeInterrupts(state)
+    )
+  }
+}
+
+λeventLogHas(shell:µAppBootstrap,text:String)=>Bool match §list.find(
+  λ(entry:µEventEntry)=>Bool=§string.contains(
+    entry.message,
+    text
+  ),
+  shell.eventLog
+){
+  Some(_)=>true|
+  None()=>false
+}
+
+λfacilityTilesWithoutInfrastructure(tiles:[µFacilityTile])=>[µFacilityTile]=tiles reduce (λ(filtered:[µFacilityTile],tile:µFacilityTile)=>[µFacilityTile] match tile.kind{
+  µObjectiveTile(_)=>filtered|
+  µRelayTile()=>filtered|
+  µTerminalTile(_)=>filtered|
+  _=>filtered⧺[tile]
+}) from []
+
+λloadShellState(shell:µAppBootstrap)=>µGameState=•gameApi.loadAutosaveState(shell.autosave)
+
 λmain()=>Unit=()
+
+λrobotFromState(robotId:String,state:µGameState)=>Option[µRobotState]=•simulation.findRobot(
+  µRobotId(robotId),
+  state.activeMission.robots
+)
+
+λshellFromState(state:µGameState)=>µAppBootstrap=•gameApi.hydrateBrowserShell(•gameApi.autosavePayload(state))
+
+λstateWithMission(mission:µMissionState,state:µGameState)=>µGameState={
+  activeMission:mission,
+  campaign:state.campaign,
+  eventLog:state.eventLog,
+  schemaVersion:state.schemaVersion,
+  seed:state.seed,
+  turn:state.turn
+}
+
+λstateWithoutOrders(state:µGameState)=>µGameState={
+  activeMission:{
+    alarmLevel:state.activeMission.alarmLevel,
+    contract:state.activeMission.contract,
+    exposure:state.activeMission.exposure,
+    facility:state.activeMission.facility,
+    interrupts:state.activeMission.interrupts,
+    missionClock:state.activeMission.missionClock,
+    objective:state.activeMission.objective,
+    orders:[],
+    robots:state.activeMission.robots,
+    status:state.activeMission.status,
+    trace:state.activeMission.trace
+  },
+  campaign:state.campaign,
+  eventLog:state.eventLog,
+  schemaVersion:state.schemaVersion,
+  seed:state.seed,
+  turn:state.turn
+}
 
 test "bootstrap mission uses HelixGrid" {
   •gameApi.bootstrap().mission.corporation="HelixGrid"
@@ -25,6 +99,7 @@ test "bootstrap exposes playable browser controls" {
   l shell=(•gameApi.bootstrap():µAppBootstrap);
   shell.controls.canAdvance
     and shell.controls.canAcknowledge=false
+    and shell.controls.canQueueOrders
     and shell.mission.missionStatus="In progress"
     and shell.mission.queuedOrders=4
     and shell.mission.pendingInterrupts=0
@@ -39,6 +114,7 @@ test "advanceBrowserShell stops at the next interrupt" {
     and #shell.eventLog=3
     and shell.controls.canAcknowledge
     and shell.controls.canAdvance=false
+    and shell.controls.canQueueOrders=false
     and (match shell.interrupts{
       ["objective_found prototype-battery"]=>true|
       _=>false
@@ -58,8 +134,255 @@ test "acknowledgeBrowserShell clears interrupts so play can continue" {
   #cleared.interrupts=0
     and cleared.controls.canAcknowledge=false
     and cleared.controls.canAdvance
+    and cleared.controls.canQueueOrders
     and cleared.mission.pendingInterrupts=0
     and cleared.mission.queuedOrders=3
+}
+
+test "draining the seeded queue exposes queue-more browser controls" {
+  l shell=(shellFromState(drainOrders(
+    16,
+    •gameState.initialGameState()
+  )):µAppBootstrap);
+  shell.mission.queuedOrders=0
+    and shell.controls.canAdvance=false
+    and shell.controls.canQueueOrders
+    and §string.contains(
+      shell.controls.status,
+      "Queue more orders"
+    )
+}
+
+test "queueBrowserOrder appends move and relay orders into the autosave shell" {
+  l queuedMove=(•gameApi.queueBrowserOrder(
+    shellFromState(drainOrders(
+      16,
+      •gameState.initialGameState()
+    )).autosave,
+    µBrowserMove(
+      "mira-1",
+      {
+        x:7,
+        y:2
+      }
+    )
+  ):µAppBootstrap);
+  l queuedRelay=(•gameApi.queueBrowserOrder(
+    queuedMove.autosave,
+    µBrowserReturnToRelay("wisp-1")
+  ):µAppBootstrap);
+  l afterMove=(•gameApi.advanceBrowserShell(queuedRelay.autosave):µAppBootstrap);
+  l cleared=(•gameApi.acknowledgeBrowserShell(•gameApi.advanceBrowserShell(•gameApi.acknowledgeBrowserShell(afterMove.autosave).autosave).autosave):µAppBootstrap);
+  queuedMove.mission.queuedOrders=1
+    and queuedMove.controls.canAdvance
+    and queuedMove.controls.canQueueOrders
+    and queuedRelay.mission.queuedOrders=2
+    and (match loadShellState(queuedRelay).activeMission.orders{
+      [
+  first,
+  second
+]=>first.assignedRobot=µRobotId("mira-1")
+        and first.order=µMoveTo({
+          x:7,
+          y:2
+        })
+        and second.assignedRobot=µRobotId("wisp-1")
+        and second.order=µReturnToRelay()|
+      _=>false
+    })
+    and (match •simulation.findRobot(
+      µRobotId("mira-1"),
+      loadShellState(afterMove).activeMission.robots
+    ){
+      Some(robot)=>robot.position={
+        x:7,
+        y:2
+      } and robot.locationLabel="Advance point 7,2"|
+      None()=>false
+    })
+    and (match afterMove.interrupts{
+      ["order_completed mira-1"]=>true|
+      _=>false
+    })
+    and (match §list.find(
+      λ(robot:µRobotSummary)=>Bool=robot.id="wisp-1" and robot.signal="Relay online",
+      cleared.robots
+    ){
+      Some(_)=>true|
+      None()=>false
+    })
+    and cleared.mission.queuedOrders=0
+    and cleared.controls.canQueueOrders
+}
+
+test "queueBrowserOrder supports scan interact and extract workflows" {
+  l queuedScan=(•gameApi.queueBrowserOrder(
+    shellFromState(stateWithoutOrders(•gameState.initialGameState())).autosave,
+    µBrowserScan("gecko-1")
+  ):µAppBootstrap);
+  l afterScan=(•gameApi.advanceBrowserShell(queuedScan.autosave):µAppBootstrap);
+  l afterInteract=(•gameApi.advanceBrowserShell(•gameApi.queueBrowserOrder(
+    •gameApi.acknowledgeBrowserShell(afterScan.autosave).autosave,
+    µBrowserInteract("atlas-1")
+  ).autosave):µAppBootstrap);
+  l afterExtract=(•gameApi.advanceBrowserShell(•gameApi.queueBrowserOrder(
+    •gameApi.acknowledgeBrowserShell(afterInteract.autosave).autosave,
+    µBrowserExtract("atlas-1")
+  ).autosave):µAppBootstrap);
+  queuedScan.mission.queuedOrders=1
+    and afterScan.mission.objectiveStatus="Located"
+    and (match afterScan.interrupts{
+      ["objective_found prototype-battery"]=>true|
+      _=>false
+    })
+    and afterInteract.mission.objectiveStatus="atlas-1 secured the package"
+    and afterExtract.mission.missionStatus="Extracted"
+    and afterExtract.mission.objectiveStatus="Extracted"
+}
+
+test "queueBrowserOrder rejects invalid browser commands deterministically" {
+  l interrupted=(•gameApi.advanceBrowserShell(•gameApi.bootstrap().autosave):µAppBootstrap);
+  l rejectedWhileInterrupted=(•gameApi.queueBrowserOrder(
+    interrupted.autosave,
+    µBrowserHold("mira-1")
+  ):µAppBootstrap);
+  l rejectedMove=(•gameApi.queueBrowserOrder(
+    shellFromState(stateWithoutOrders(•gameState.initialGameState())).autosave,
+    µBrowserMove(
+      "mira-1",
+      {
+        x:6,
+        y:1
+      }
+    )
+  ):µAppBootstrap);
+  rejectedWhileInterrupted.mission.queuedOrders=interrupted.mission.queuedOrders
+    and rejectedWhileInterrupted.controls.canQueueOrders=false
+    and eventLogHas(
+      rejectedWhileInterrupted,
+      "Order rejected: mira-1 -> hold"
+    )
+    and rejectedMove.mission.queuedOrders=0
+    and eventLogHas(
+      rejectedMove,
+      "not walkable"
+    )
+}
+
+test "browser order helpers cover missing targets and operator validation" {
+  l base=(stateWithoutOrders(•gameState.initialGameState()):µGameState);
+  l stripped=(stateWithMission(
+    {
+      alarmLevel:base.activeMission.alarmLevel,
+      contract:base.activeMission.contract,
+      exposure:base.activeMission.exposure,
+      facility:{
+        height:base.activeMission.facility.height,
+        rooms:base.activeMission.facility.rooms,
+        security:base.activeMission.facility.security,
+        tiles:facilityTilesWithoutInfrastructure(base.activeMission.facility.tiles),
+        width:base.activeMission.facility.width
+      },
+      interrupts:base.activeMission.interrupts,
+      missionClock:base.activeMission.missionClock,
+      objective:{
+        extracted:false,
+        kind:base.activeMission.objective.kind,
+        located:true,
+        objectiveId:base.activeMission.objective.objectiveId,
+        securedBy:None()
+      },
+      orders:base.activeMission.orders,
+      robots:base.activeMission.robots,
+      status:base.activeMission.status,
+      trace:base.activeMission.trace
+    },
+    base
+  ):µGameState);
+  match robotFromState(
+    "atlas-1",
+    base
+  ){
+    Some(atlas)=>match robotFromState(
+      "mira-1",
+      base
+    ){
+      Some(mira)=>match •gameApi.findFacilityTile(
+        {
+          x:9,
+          y:9
+        },
+        base
+      ){
+        Some(_)=>false|
+        None()=>match •gameApi.findMissionObjectiveTile(stripped){
+          Some(_)=>false|
+          None()=>match •gameApi.findMissionRelayTile(stripped){
+            Some(_)=>false|
+            None()=>match •gameApi.findMissionTerminalTile(base){
+              Some(_)=>match •gameApi.findMissionTerminalTile(stripped){
+                Some(_)=>false|
+                None()=>match •gameApi.resolveBrowserRobot(
+                  "ghost-1",
+                  base
+                ){
+                  Ok(_)=>false|
+                  Err(_)=>match •gameApi.validateExtractOrder(
+                    atlas,
+                    base
+                  ){
+                    Ok(_)=>false|
+                    Err(_)=>match •gameApi.validateFollowTarget(
+                      mira,
+                      base,
+                      "atlas-1"
+                    ){
+                      Ok(target)=>target=µRobotId("atlas-1") and (match •gameApi.validateFollowTarget(
+                        mira,
+                        base,
+                        "mira-1"
+                      ){
+                        Ok(_)=>false|
+                        Err(_)=>match •gameApi.validateHackOrder(
+                          mira,
+                          base
+                        ){
+                          Ok(µHack(_))=>match •gameApi.validateHackOrder(
+                            atlas,
+                            base
+                          ){
+                            Ok(_)=>false|
+                            Err(_)=>match •gameApi.validateInteractOrder(stripped){
+                              Ok(_)=>false|
+                              Err(_)=>match •gameApi.validateRelayOrder(stripped){
+                                Ok(_)=>false|
+                                Err(_)=>match •gameApi.validateScanOrder(
+                                  mira,
+                                  base
+                                ){
+                                  Ok(_)=>false|
+                                  Err(_)=>true
+                                }
+                              }
+                            }
+                          }|
+                          _=>false
+                        }
+                      })|
+                      Err(_)=>false
+                    }
+                  }
+                }
+              }|
+              None()=>false
+            }
+          }
+        }
+      }|
+      None()=>false
+    }|
+    None()=>false
+  }
 }
 
 test "resetBrowserShell returns to the initial deterministic mission" {

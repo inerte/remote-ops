@@ -18,6 +18,14 @@ t BoardSummary={
   width:Int
 }
 
+t BrowserOrderCommand=BrowserAbortMission(String)|BrowserExtract(String)|BrowserFollow(
+  String,
+  String
+)|BrowserHack(String)|BrowserHold(String)|BrowserInteract(String)|BrowserMove(
+  String,
+  Position
+)|BrowserReturnToRelay(String)|BrowserScan(String)
+
 t CampaignState={
   availableContracts:[ContractSummary],
   completedContracts:[ContractId],
@@ -37,6 +45,7 @@ t ContractSummary={
 t ControlSummary={
   canAcknowledge:Bool,
   canAdvance:Bool,
+  canQueueOrders:Bool,
   canReset:Bool,
   status:String
 }

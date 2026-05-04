@@ -39,6 +39,28 @@
   µAlarmTacticalResponse()=>"6 / 6"
 }
 
+λappendBrowserEvent(message:String,state:µGameState)=>µGameState={
+  activeMission:state.activeMission,
+  campaign:state.campaign,
+  eventLog:state.eventLog⧺[{
+    message:message,
+    turn:state.turn
+  }],
+  schemaVersion:state.schemaVersion,
+  seed:state.seed,
+  turn:state.turn
+}
+
+λappendQueuedBrowserOrder(command:µBrowserOrderCommand,order:µRobotOrder,state:µGameState)=>µGameState=appendBrowserEvent(
+  "Operator queued order: "
+    ++browserCommandLabel(command)
+    ++".",
+  updateMissionOrders(
+    state.activeMission.orders⧺[order],
+    state
+  )
+)
+
 λautosavePayload(state:µGameState)=>String=•saveCodecs.stringifySaveFile(•saveApi.createSaveFile(
   gameVersion(),
   autosaveSavedAt(),
@@ -58,11 +80,176 @@
 
 λbrowserAdvanceLimit()=>Int=32
 
+λbrowserCommandLabel(command:µBrowserOrderCommand)=>String match command{
+  µBrowserAbortMission(robotId)=>robotId++" -> abort_mission"|
+  µBrowserExtract(robotId)=>robotId++" -> extract"|
+  µBrowserFollow(
+  robotId,
+  targetRobotId
+)=>robotId
+    ++" -> follow "
+    ++targetRobotId|
+  µBrowserHack(robotId)=>robotId++" -> hack"|
+  µBrowserHold(robotId)=>robotId++" -> hold"|
+  µBrowserInteract(robotId)=>robotId++" -> interact"|
+  µBrowserMove(
+  robotId,
+  position
+)=>robotId
+    ++" -> move_to "
+    ++positionLabel(position)|
+  µBrowserReturnToRelay(robotId)=>robotId++" -> return_to_relay"|
+  µBrowserScan(robotId)=>robotId++" -> scan"
+}
+
 λbrowserControls(state:µGameState)=>µControlSummary={
   canAcknowledge:hasPendingInterrupts(state),
   canAdvance:canAdvanceSimulation(state),
+  canQueueOrders:canQueueOrders(state),
   canReset:true,
   status:controlStatus(state)
+}
+
+λbrowserRobotOrder(command:µBrowserOrderCommand,state:µGameState)=>Result[
+  µRobotOrder,
+  String
+] match queueableMissionState(state){
+  Ok(_)=>match command{
+    µBrowserAbortMission(robotId)=>match resolveBrowserRobot(
+      robotId,
+      state
+    ){
+      Ok(robot)=>Ok(queuedRobotOrder(
+        µAbortMission(),
+        robot.id
+      ))|
+      Err(message)=>Err(message)
+    }|
+    µBrowserExtract(robotId)=>match resolveBrowserRobot(
+      robotId,
+      state
+    ){
+      Ok(robot)=>match validateExtractOrder(
+        robot,
+        state
+      ){
+        Ok(order)=>Ok(queuedRobotOrder(
+          order,
+          robot.id
+        ))|
+        Err(message)=>Err(message)
+      }|
+      Err(message)=>Err(message)
+    }|
+    µBrowserFollow(
+  robotId,
+  targetRobotId
+)=>match resolveBrowserRobot(
+      robotId,
+      state
+    ){
+      Ok(robot)=>match validateFollowTarget(
+        robot,
+        state,
+        targetRobotId
+      ){
+        Ok(target)=>Ok(queuedRobotOrder(
+          µFollow(target),
+          robot.id
+        ))|
+        Err(message)=>Err(message)
+      }|
+      Err(message)=>Err(message)
+    }|
+    µBrowserHack(robotId)=>match resolveBrowserRobot(
+      robotId,
+      state
+    ){
+      Ok(robot)=>match validateHackOrder(
+        robot,
+        state
+      ){
+        Ok(order)=>Ok(queuedRobotOrder(
+          order,
+          robot.id
+        ))|
+        Err(message)=>Err(message)
+      }|
+      Err(message)=>Err(message)
+    }|
+    µBrowserHold(robotId)=>match resolveBrowserRobot(
+      robotId,
+      state
+    ){
+      Ok(robot)=>Ok(queuedRobotOrder(
+        µHold(),
+        robot.id
+      ))|
+      Err(message)=>Err(message)
+    }|
+    µBrowserInteract(robotId)=>match resolveBrowserRobot(
+      robotId,
+      state
+    ){
+      Ok(robot)=>match validateInteractOrder(state){
+        Ok(order)=>Ok(queuedRobotOrder(
+          order,
+          robot.id
+        ))|
+        Err(message)=>Err(message)
+      }|
+      Err(message)=>Err(message)
+    }|
+    µBrowserMove(
+  robotId,
+  position
+)=>match resolveBrowserRobot(
+      robotId,
+      state
+    ){
+      Ok(robot)=>match validateMoveTarget(
+        position,
+        state
+      ){
+        Ok(targetPosition)=>Ok(queuedRobotOrder(
+          µMoveTo(targetPosition),
+          robot.id
+        ))|
+        Err(message)=>Err(message)
+      }|
+      Err(message)=>Err(message)
+    }|
+    µBrowserReturnToRelay(robotId)=>match resolveBrowserRobot(
+      robotId,
+      state
+    ){
+      Ok(robot)=>match validateRelayOrder(state){
+        Ok(order)=>Ok(queuedRobotOrder(
+          order,
+          robot.id
+        ))|
+        Err(message)=>Err(message)
+      }|
+      Err(message)=>Err(message)
+    }|
+    µBrowserScan(robotId)=>match resolveBrowserRobot(
+      robotId,
+      state
+    ){
+      Ok(robot)=>match validateScanOrder(
+        robot,
+        state
+      ){
+        Ok(order)=>Ok(queuedRobotOrder(
+          order,
+          robot.id
+        ))|
+        Err(message)=>Err(message)
+      }|
+      Err(message)=>Err(message)
+    }
+  }|
+  Err(message)=>Err(message)
 }
 
 λbrowserShell(state:µGameState)=>µAppBootstrap={
@@ -86,6 +273,14 @@
   }
 }
 
+λcanQueueOrders(state:µGameState)=>Bool match missionIsInProgress(state.activeMission.status){
+  true=>match hasPendingInterrupts(state){
+    true=>false|
+    false=>true
+  }|
+  false=>false
+}
+
 λcontrolStatus(state:µGameState)=>String match state.activeMission.status{
   µMissionAborted()=>"Mission aborted. Reset the mission to replay the deterministic opening."|
   µMissionExtracted()=>"Objective extracted. Reset the mission to replay the deterministic opening."|
@@ -93,8 +288,8 @@
   µMissionInProgress()=>match hasPendingInterrupts(state){
     true=>"Interrupts are waiting. Acknowledge them before advancing the simulation."|
     false=>match hasQueuedOrders(state){
-      true=>"Advance the deterministic simulation until the next interrupt or status change."|
-      false=>"No queued orders remain in this milestone build. Reset the mission to replay the opener."
+      true=>"Advance the deterministic simulation until the next interrupt or status change. Queue more orders from the browser shell if needed."|
+      false=>"No queued orders remain. Queue more orders from the browser shell or reset the mission to replay the opener."
     }
   }
 }
@@ -103,6 +298,35 @@
   µCorporationId("helixgrid")=>"HelixGrid"|
   µCorporationId(value)=>value
 }
+
+λfindFacilityTile(position:µPosition,state:µGameState)=>Option[µFacilityTile]=§list.find(
+  λ(tile:µFacilityTile)=>Bool=tile.position=position,
+  state.activeMission.facility.tiles
+)
+
+λfindMissionObjectiveTile(state:µGameState)=>Option[µFacilityTile]=§list.find(
+  λ(tile:µFacilityTile)=>Bool match tile.kind{
+    µObjectiveTile(objectiveId)=>objectiveId=state.activeMission.objective.objectiveId|
+    _=>false
+  },
+  state.activeMission.facility.tiles
+)
+
+λfindMissionRelayTile(state:µGameState)=>Option[µFacilityTile]=§list.find(
+  λ(tile:µFacilityTile)=>Bool match tile.kind{
+    µRelayTile()=>true|
+    _=>false
+  },
+  state.activeMission.facility.tiles
+)
+
+λfindMissionTerminalTile(state:µGameState)=>Option[µFacilityTile]=§list.find(
+  λ(tile:µFacilityTile)=>Bool match tile.kind{
+    µTerminalTile(_)=>true|
+    _=>false
+  },
+  state.activeMission.facility.tiles
+)
 
 λgameVersion()=>String="prototype"
 
@@ -125,6 +349,14 @@
 λhasQueuedOrders(state:µGameState)=>Bool match state.activeMission.orders{
   []=>false|
   _=>true
+}
+
+λhasRobotPart(part:µRobotPartType,robot:µRobotState)=>Bool match §list.find(
+  λ(robotPart:µRobotPartType)=>Bool=robotPart=part,
+  robot.parts
+){
+  Some(_)=>true|
+  None()=>false
 }
 
 λhydrateBrowserShell(autosave:String)=>µAppBootstrap=browserShell(loadAutosaveState(autosave))
@@ -188,7 +420,64 @@
 
 λpacketCount()=>Int=•packetGenerator.packetCount(bootstrapState())
 
+λpositionLabel(position:µPosition)=>String=§string.intToString(position.x)
+  ++","
+  ++§string.intToString(position.y)
+
+λqueueBrowserOrder(autosave:String,command:µBrowserOrderCommand)=>µAppBootstrap=browserShell(queueBrowserOrderState(
+  command,
+  loadAutosaveState(autosave)
+))
+
+λqueueBrowserOrderState(command:µBrowserOrderCommand,state:µGameState)=>µGameState match browserRobotOrder(
+  command,
+  state
+){
+  Ok(order)=>appendQueuedBrowserOrder(
+    command,
+    order,
+    state
+  )|
+  Err(message)=>appendBrowserEvent(
+    "Order rejected: "
+      ++browserCommandLabel(command)
+      ++" | "
+      ++message,
+    state
+  )
+}
+
+λqueueableMissionState(state:µGameState)=>Result[
+  µGameState,
+  String
+] match missionIsInProgress(state.activeMission.status){
+  true=>match hasPendingInterrupts(state){
+    true=>Err("Acknowledge interrupts before queuing new orders.")|
+    false=>Ok(state)
+  }|
+  false=>Err("Mission is no longer in progress.")
+}
+
+λqueuedRobotOrder(order:µOrder,robotId:µRobotId)=>µRobotOrder={
+  assignedRobot:robotId,
+  order:order,
+  status:µOrderQueued()
+}
+
 λresetBrowserShell()=>µAppBootstrap=browserShell(bootstrapState())
+
+λresolveBrowserRobot(robotId:String,state:µGameState)=>Result[
+  µRobotState,
+  String
+] match •simulation.findRobot(
+  µRobotId(robotId),
+  state.activeMission.robots
+){
+  Some(robot)=>Ok(robot)|
+  None()=>Err("Unknown robot '"
+    ++robotId
+    ++"'.")
+}
 
 λrobotArchetypeDisplay(archetype:µRobotArchetype)=>String match archetype{
   µAtlasBreacher()=>"Atlas Breacher"|
@@ -233,4 +522,125 @@
 λtwoDigit(value:Int)=>String match value<10{
   true=>"0"++§string.intToString(value)|
   false=>§string.intToString(value)
+}
+
+λupdateMissionOrders(orders:[µRobotOrder],state:µGameState)=>µGameState={
+  activeMission:{
+    alarmLevel:state.activeMission.alarmLevel,
+    contract:state.activeMission.contract,
+    exposure:state.activeMission.exposure,
+    facility:state.activeMission.facility,
+    interrupts:state.activeMission.interrupts,
+    missionClock:state.activeMission.missionClock,
+    objective:state.activeMission.objective,
+    orders:orders,
+    robots:state.activeMission.robots,
+    status:state.activeMission.status,
+    trace:state.activeMission.trace
+  },
+  campaign:state.campaign,
+  eventLog:state.eventLog,
+  schemaVersion:state.schemaVersion,
+  seed:state.seed,
+  turn:state.turn
+}
+
+λvalidateExtractOrder(robot:µRobotState,state:µGameState)=>Result[
+  µOrder,
+  String
+] match state.activeMission.objective.securedBy{
+  Some(owner)=>match owner=robot.id{
+    true=>Ok(µExtract())|
+    false=>Err("Objective is secured by "
+      ++robotIdDisplay(owner)
+      ++".")
+  }|
+  None()=>Err("Secure the objective before extracting.")
+}
+
+λvalidateFollowTarget(robot:µRobotState,state:µGameState,targetRobotId:String)=>Result[
+  µRobotId,
+  String
+] match robot.id=µRobotId(targetRobotId){
+  true=>Err("Robots cannot follow themselves.")|
+  false=>match resolveBrowserRobot(
+    targetRobotId,
+    state
+  ){
+    Ok(targetRobot)=>Ok(targetRobot.id)|
+    Err(message)=>Err(message)
+  }
+}
+
+λvalidateHackOrder(robot:µRobotState,state:µGameState)=>Result[
+  µOrder,
+  String
+] match hasRobotPart(
+  µBasicHackingModule(),
+  robot
+){
+  true=>match findMissionTerminalTile(state){
+    Some(tile)=>match tile.kind{
+      µTerminalTile(terminalId)=>Ok(µHack(terminalId))|
+      _=>Err("Mission has no accessible terminal target.")
+    }|
+    None()=>Err("Mission has no accessible terminal target.")
+  }|
+  false=>Err(robot.name++" lacks a hacking module.")
+}
+
+λvalidateInteractOrder(state:µGameState)=>Result[
+  µOrder,
+  String
+] match state.activeMission.objective.located{
+  true=>match state.activeMission.objective.securedBy{
+    Some(owner)=>Err("Objective is already secured by "
+      ++robotIdDisplay(owner)
+      ++".")|
+    None()=>match findMissionObjectiveTile(state){
+      Some(_)=>Ok(µInteract(state.activeMission.objective.objectiveId))|
+      None()=>Err("Mission objective target is unavailable.")
+    }
+  }|
+  false=>Err("Locate the objective before interacting with it.")
+}
+
+λvalidateMoveTarget(position:µPosition,state:µGameState)=>Result[
+  µPosition,
+  String
+] match findFacilityTile(
+  position,
+  state
+){
+  Some(tile)=>match tile.walkable{
+    true=>Ok(position)|
+    false=>Err("Move target "
+      ++positionLabel(position)
+      ++" is not walkable.")
+  }|
+  None()=>Err("Move target "
+    ++positionLabel(position)
+    ++" is not part of the mission map.")
+}
+
+λvalidateRelayOrder(state:µGameState)=>Result[
+  µOrder,
+  String
+] match findMissionRelayTile(state){
+  Some(_)=>Ok(µReturnToRelay())|
+  None()=>Err("Mission has no relay anchor.")
+}
+
+λvalidateScanOrder(robot:µRobotState,state:µGameState)=>Result[
+  µOrder,
+  String
+] match hasRobotPart(
+  µFiberCamera(),
+  robot
+){
+  true=>match state.activeMission.objective.located{
+    true=>Err("Objective is already located.")|
+    false=>Ok(µScan())
+  }|
+  false=>Err(robot.name++" lacks a fiber camera.")
 }
