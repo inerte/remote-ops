@@ -1,4 +1,6 @@
 import { Application, Container, Graphics, Text } from 'pixi.js'
+import { positionKey, tileAccessLabel, tileDetailLabel, tileKindLabel, tileTacticalNote, tileVisibilityLabel } from '../app/boardPresentation'
+import type { BoardSelection } from '../app/boardInspector'
 import type { BoardSummary, BoardTileKind, BoardTileSummary, RobotSummary } from '../app/types'
 
 type RenderedTileKind = BoardTileKind | 'void'
@@ -88,74 +90,11 @@ const escapeHtml = (value: string): string =>
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 
-const positionKey = (x: number, y: number): string => `${x},${y}`
-
-const tileDetailLabel = (tile: BoardTileSummary | undefined): string => {
-  if (tile === undefined) {
-    return 'Off-map'
-  }
-
-  return tile.revealed ? tile.label : `${tile.label} · obscured`
-}
-
-const tileKindLabel = (kind: BoardTileKind): string => {
-  switch (kind) {
-    case 'duct':
-      return 'Access duct'
-    case 'door':
-      return 'Security door'
-    case 'entry':
-      return 'Entry point'
-    case 'floor':
-      return 'Operational floor'
-    case 'objective':
-      return 'Mission objective'
-    case 'relay':
-      return 'Relay node'
-    case 'terminal':
-      return 'Network terminal'
-    case 'wall':
-      return 'Structural wall'
-  }
-}
-
-const tileVisibilityLabel = (tile: BoardTileSummary): string => (tile.revealed ? 'Revealed' : 'Obscured')
-
-const tileAccessLabel = (tile: BoardTileSummary): string => {
-  if (tile.kind === 'wall') {
-    return 'Impassable'
-  }
-
-  return tile.walkable ? 'Walkable' : 'Blocked'
-}
-
-const tileTacticalNote = (tile: BoardTileSummary): string => {
-  switch (tile.kind) {
-    case 'duct':
-      return tile.revealed
-        ? 'Low-profile route for covert repositioning and microcrawler movement.'
-        : 'A concealed access route is present, but current intel is incomplete.'
-    case 'door':
-      return tile.walkable
-        ? 'This choke point is currently open for route planning.'
-        : 'Movement stalls here until the crew opens, bypasses, or breaches the door.'
-    case 'entry':
-      return 'Primary insertion or fallback extraction lane for the operation.'
-    case 'floor':
-      return tile.revealed
-        ? 'Known traversable interior space for safe operator routing.'
-        : 'Interior route exists here, but the tactical picture is still incomplete.'
-    case 'objective':
-      return tile.revealed
-        ? 'Mission-critical asset location once the crew can secure it.'
-        : 'Objective signature is flagged here, but the exact state remains obscured.'
-    case 'relay':
-      return 'Signal anchor point for keeping remote units online and coordinated.'
-    case 'terminal':
-      return 'Network access point for hacks, intel pulls, or subsystem control.'
-    case 'wall':
-      return 'Hard structural boundary; plan routes around it.'
-  }
+interface BoardInteractionOptions {
+  readonly activeRobotId?: string
+  readonly onSelectRobot?: (robot: RobotSummary) => void
+  readonly onSelectTile?: (tile: BoardTileSummary) => void
+  readonly selection?: BoardSelection
 }
 
 const drawFrame = (
@@ -387,6 +326,7 @@ export const createBoard = async (
   host: HTMLElement,
   board: BoardSummary,
   robots: readonly RobotSummary[],
+  interaction?: BoardInteractionOptions,
 ): Promise<Application> => {
   const app = new Application()
   const hostStyle = getComputedStyle(host)
@@ -441,6 +381,12 @@ export const createBoard = async (
   const originY = HUD_HEIGHT + Math.floor((hostHeight - HUD_HEIGHT - boardPixelHeight) / 2)
   const tileSizeInner = tileSize - TILE_GAP
   const tileLookup = new Map(board.tiles.map((tile) => [positionKey(tile.position.x, tile.position.y), tile]))
+  const selectedRobotId =
+    interaction?.selection?.kind === 'robot' ? interaction.selection.robotId : undefined
+  const selectedTileKey =
+    interaction?.selection?.kind === 'tile'
+      ? positionKey(interaction.selection.position.x, interaction.selection.position.y)
+      : undefined
 
   drawFrame(stage, originX, originY, boardPixelWidth, boardPixelHeight)
 
@@ -625,6 +571,9 @@ export const createBoard = async (
     hotspot.style.top = `${Math.round(centerY)}px`
     hotspot.style.width = `${tileSizeInner}px`
     hotspot.style.height = `${tileSizeInner}px`
+    if (selectedTileKey === positionKey(tile.position.x, tile.position.y)) {
+      hotspot.dataset.selected = 'true'
+    }
     hotspot.setAttribute(
       'aria-label',
       `${tile.label}, ${tileKindLabel(tile.kind)}, ${tileVisibilityLabel(tile).toLowerCase()}, grid ${tile.position.x}, ${tile.position.y}`,
@@ -641,6 +590,9 @@ export const createBoard = async (
     })
     hotspot.addEventListener('blur', () => {
       hideTooltip(hotspot)
+    })
+    hotspot.addEventListener('click', () => {
+      interaction?.onSelectTile?.(tile)
     })
 
     tileLayer.appendChild(hotspot)
@@ -707,6 +659,12 @@ export const createBoard = async (
     hotspot.style.top = `${Math.round(centerY)}px`
     hotspot.style.width = `${Math.max(40, radius * 2 + 16)}px`
     hotspot.style.height = `${Math.max(40, radius * 2 + 16)}px`
+    if (interaction?.activeRobotId === robot.id) {
+      hotspot.dataset.operator = 'true'
+    }
+    if (selectedRobotId === robot.id) {
+      hotspot.dataset.selected = 'true'
+    }
     hotspot.setAttribute('aria-label', `${robot.name}, ${robot.archetype}, battery ${robot.battery}%`)
 
     const tile = tileLookup.get(positionKey(robot.position.x, robot.position.y))
@@ -722,6 +680,9 @@ export const createBoard = async (
     })
     hotspot.addEventListener('blur', () => {
       hideTooltip(hotspot)
+    })
+    hotspot.addEventListener('click', () => {
+      interaction?.onSelectRobot?.(robot)
     })
 
     robotLayer.appendChild(hotspot)

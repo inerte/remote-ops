@@ -21,6 +21,12 @@ import {
   type BrowserShellOrderType,
 } from './app/orders'
 import { validateAutosavePayload } from './app/autosave'
+import {
+  createBoardInspectorModel,
+  NO_BOARD_SELECTION,
+  normalizeBoardSelection,
+  type BoardSelection,
+} from './app/boardInspector'
 import type { AppBootstrap } from './app/types'
 import { createBoard } from './renderer/board'
 import './styles/app.css'
@@ -193,15 +199,47 @@ const main = async (): Promise<void> => {
   let boardApp: BoardHandle | null = null
   let shell = await loadInitialShell()
   let orderDraft = createOrderDraft(shell)
+  let boardSelection: BoardSelection = NO_BOARD_SELECTION
   let orderStatus = createDefaultOrderStatus(shell)
   let saveStatus = createSaveStatus(shell.autosave)
 
   const render = async (): Promise<void> => {
     boardApp?.destroy()
 
+    boardSelection = isMissionStage(shell) ? normalizeBoardSelection(shell, boardSelection) : NO_BOARD_SELECTION
     orderDraft = createOrderDraft(shell, orderDraft)
-    const layout = renderLayout(app, shell, orderDraft)
-    boardApp = await createBoard(layout.boardHost, shell.board, shell.robots)
+    const boardInspector = createBoardInspectorModel(shell, orderDraft, boardSelection)
+    const layout = renderLayout(app, shell, orderDraft, boardInspector)
+    boardApp = await createBoard(
+      layout.boardHost,
+      shell.board,
+      shell.robots,
+      isMissionStage(shell)
+        ? {
+            activeRobotId: orderDraft.robotId,
+            onSelectRobot: (robot) => {
+              boardSelection = { kind: 'robot', robotId: robot.id }
+              orderStatus = {
+                state: 'idle',
+                text: `${robot.name} linked to the board uplink. Use the contextual action panel to issue orders.`,
+              }
+              void render()
+            },
+            onSelectTile: (tile) => {
+              boardSelection = {
+                kind: 'tile',
+                position: tile.position,
+              }
+              orderStatus = {
+                state: 'idle',
+                text: `${tile.label} selected on the tactical board. Use the contextual action panel to queue a command.`,
+              }
+              void render()
+            },
+            selection: boardSelection,
+          }
+        : undefined,
+    )
 
     setStatus(layout.actionStatus, shell.controls.status, createActionTone(shell))
     setStatus(layout.orderStatus, orderStatus.text, orderStatus.state)
@@ -224,6 +262,27 @@ const main = async (): Promise<void> => {
         robotId: layout.orderRobotField.value,
         targetRobotId: layout.orderTargetField.value,
       })
+    }
+
+    const queueDraftOrder = async (
+      nextDraft: ReturnType<typeof createOrderDraft>,
+      busyText: string,
+    ): Promise<void> => {
+      setStatus(layout.orderStatus, busyText, 'idle')
+
+      try {
+        shell = await runQueueOrder(shell.autosave, buildBrowserOrderCommand(nextDraft))
+        orderDraft = createOrderDraft(shell, nextDraft)
+        orderStatus = createQueuedOrderStatus(shell)
+        saveStatus = createSaveStatus(shell.autosave)
+        await render()
+      } catch (error: unknown) {
+        orderStatus = {
+          state: 'error',
+          text: formatError(error),
+        }
+        setStatus(layout.orderStatus, orderStatus.text, orderStatus.state)
+      }
     }
 
     const runWorldAction = async (
@@ -371,7 +430,7 @@ const main = async (): Promise<void> => {
     layout.orderRobotField.addEventListener('change', () => {
       refreshDraftFromLayout()
       layout.orderTargetField.value = orderDraft.targetRobotId
-      syncOrderForm()
+      void render()
     })
 
     layout.orderTypeField.addEventListener('change', () => {
@@ -397,23 +456,60 @@ const main = async (): Promise<void> => {
 
       void (async () => {
         refreshDraftFromLayout()
-        setStatus(layout.orderStatus, 'Queueing deterministic robot order…', 'idle')
-
-        try {
-          shell = await runQueueOrder(shell.autosave, buildBrowserOrderCommand(orderDraft))
-          orderDraft = createOrderDraft(shell, orderDraft)
-          orderStatus = createQueuedOrderStatus(shell)
-          saveStatus = createSaveStatus(shell.autosave)
-          await render()
-        } catch (error: unknown) {
-          orderStatus = {
-            state: 'error',
-            text: formatError(error),
-          }
-          setStatus(layout.orderStatus, orderStatus.text, orderStatus.state)
-        }
+        await queueDraftOrder(orderDraft, 'Queueing deterministic robot order…')
       })()
     })
+
+    for (const button of layout.boardActionButtons) {
+      button.addEventListener('click', () => {
+        const actionKind = button.dataset.boardActionKind
+        if (actionKind === undefined) {
+          throw new Error('Board action is missing its data-board-action-kind attribute.')
+        }
+
+        if (actionKind === 'set-operator') {
+          const robotId = button.dataset.boardRobotId
+          if (robotId === undefined) {
+            throw new Error('Board operator action is missing its data-board-robot-id attribute.')
+          }
+
+          const robot = shell.robots.find((candidate) => candidate.id === robotId)
+          if (robot === undefined) {
+            throw new Error(`Unknown board operator requested: ${robotId}`)
+          }
+
+          orderDraft = createOrderDraft(shell, { robotId })
+          boardSelection = { kind: 'robot', robotId }
+          orderStatus = {
+            state: 'success',
+            text: `${robot.name} is now the active board operator.`,
+          }
+          void render()
+          return
+        }
+
+        if (actionKind !== 'queue-order') {
+          throw new Error(`Unknown board action requested: ${actionKind}`)
+        }
+
+        const orderType = button.dataset.boardOrderType as BrowserShellOrderType | undefined
+        if (orderType === undefined) {
+          throw new Error('Board queue action is missing its data-board-order-type attribute.')
+        }
+
+        const nextDraft = createOrderDraft(shell, {
+          ...orderDraft,
+          moveX: button.dataset.boardMoveX ?? orderDraft.moveX,
+          moveY: button.dataset.boardMoveY ?? orderDraft.moveY,
+          orderType,
+          robotId: button.dataset.boardRobotId ?? orderDraft.robotId,
+          targetRobotId: button.dataset.boardTargetRobotId ?? orderDraft.targetRobotId,
+        })
+
+        const label = button.textContent?.trim() ?? 'board action'
+        void queueDraftOrder(nextDraft, `Queueing ${label.toLowerCase()}…`)
+      })
+    }
 
     for (const button of layout.packetButtons) {
       button.addEventListener('click', () => {

@@ -5,6 +5,11 @@ import {
   orderTypeNeedsTargetRobot,
   type BrowserOrderDraft,
 } from '../app/orders'
+import type {
+  BoardActionDescriptor,
+  BoardInspectorModel,
+  BoardInspectorStat,
+} from '../app/boardInspector'
 import type { AppBootstrap } from '../app/types'
 
 interface LayoutHandle {
@@ -13,6 +18,7 @@ interface LayoutHandle {
   readonly actionStatus: HTMLParagraphElement
   readonly advanceButton: HTMLButtonElement
   readonly autosaveButton: HTMLButtonElement
+  readonly boardActionButtons: NodeListOf<HTMLButtonElement>
   readonly boardHost: HTMLDivElement
   readonly configButtons: NodeListOf<HTMLButtonElement>
   readonly contractButtons: NodeListOf<HTMLButtonElement>
@@ -104,6 +110,30 @@ const orderOptionMarkup = (
 const packetMarkup = (packet: AppBootstrap['packets'][number]): string => `
   <button class="packet-button" data-packet-id="${escapeHtml(packet.id)}" type="button">
     Copy ${escapeHtml(packet.label)}
+  </button>
+`
+
+const boardInspectorStatMarkup = (stat: BoardInspectorStat): string => `
+  <div${stat.full ? ' class="selection-card__stat--full"' : ''}>
+    <dt>${escapeHtml(stat.label)}</dt>
+    <dd>${escapeHtml(stat.value)}</dd>
+  </div>
+`
+
+const boardInspectorActionMarkup = (action: BoardActionDescriptor): string => `
+  <button
+    class="action-button${action.variant === 'secondary' ? ' action-button--secondary' : ''}"
+    data-board-action-kind="${escapeHtml(action.actionKind)}"
+    ${action.moveX === undefined ? '' : `data-board-move-x="${escapeHtml(action.moveX)}"`}
+    ${action.moveY === undefined ? '' : `data-board-move-y="${escapeHtml(action.moveY)}"`}
+    ${action.orderType === undefined ? '' : `data-board-order-type="${escapeHtml(action.orderType)}"`}
+    ${action.robotId === undefined ? '' : `data-board-robot-id="${escapeHtml(action.robotId)}"`}
+    ${action.targetRobotId === undefined ? '' : `data-board-target-robot-id="${escapeHtml(action.targetRobotId)}"`}
+    title="${escapeHtml(action.description)}"
+    type="button"
+    ${action.disabled ? 'disabled' : ''}
+  >
+    ${escapeHtml(action.label)}
   </button>
 `
 
@@ -246,6 +276,7 @@ export const renderLayout = (
   container: HTMLElement,
   bootstrap: AppBootstrap,
   orderDraft: BrowserOrderDraft,
+  boardInspector: BoardInspectorModel,
 ): LayoutHandle => {
   const missionStage = bootstrap.shell.activeStage === 'mission'
   const selectedContract = findSelectedContract(bootstrap)
@@ -370,6 +401,33 @@ export const renderLayout = (
           <dl class="board-summary">
             ${boardStats.map(([label, value]) => headerMetricMarkup(label, value)).join('')}
           </dl>
+          ${
+            missionStage
+              ? `
+                <div class="board-inspector">
+                  <article class="selection-card selection-card--static" data-selected="true">
+                    <div class="selection-card__header">
+                      <div>
+                        <p class="eyebrow">${escapeHtml(boardInspector.eyebrow)}</p>
+                        <h3>${escapeHtml(boardInspector.title)}</h3>
+                      </div>
+                      <span class="selection-pill">${escapeHtml(boardInspector.badge)}</span>
+                    </div>
+                    <p class="selection-card__summary">${escapeHtml(boardInspector.summary)}</p>
+                    <dl class="selection-card__stats">
+                      ${boardInspector.stats.map((stat) => boardInspectorStatMarkup(stat)).join('')}
+                    </dl>
+                  </article>
+                  <div class="board-inspector__actions">
+                    ${boardInspector.actions
+                      .map((action) => boardInspectorActionMarkup(action))
+                      .join('')}
+                  </div>
+                  <p class="board-inspector__hint">${escapeHtml(boardInspector.hint)}</p>
+                </div>
+              `
+              : ''
+          }
         </section>
 
         <aside class="sidebar">
@@ -759,6 +817,7 @@ export const renderLayout = (
     actionStatus,
     advanceButton,
     autosaveButton,
+    boardActionButtons: container.querySelectorAll<HTMLButtonElement>('[data-board-action-kind]'),
     boardHost,
     configButtons: container.querySelectorAll<HTMLButtonElement>('[data-select-config]'),
     contractButtons: container.querySelectorAll<HTMLButtonElement>('[data-select-contract]'),

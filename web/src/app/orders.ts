@@ -5,6 +5,7 @@ export type BrowserShellOrderType =
   | 'move'
   | 'follow'
   | 'scan'
+  | 'hack'
   | 'interact'
   | 'extract'
   | 'returnToRelay'
@@ -25,6 +26,7 @@ type SigilVariant<Tag extends string, Fields extends readonly unknown[]> = {
 export type BrowserOrderCommand =
   | SigilVariant<'BrowserExtract', readonly [string]>
   | SigilVariant<'BrowserFollow', readonly [string, string]>
+  | SigilVariant<'BrowserHack', readonly [string]>
   | SigilVariant<'BrowserHold', readonly [string]>
   | SigilVariant<'BrowserInteract', readonly [string]>
   | SigilVariant<'BrowserMove', readonly [string, { readonly x: number; readonly y: number }]>
@@ -57,6 +59,11 @@ export const ORDER_OPTIONS: readonly BrowserOrderOption[] = [
     value: 'scan',
     label: 'Scan objective',
     description: 'Use a fiber camera to locate the objective before interacting with it.',
+  },
+  {
+    value: 'hack',
+    label: 'Hack terminal',
+    description: 'Use the selected robot to attack the exposed mission terminal.',
   },
   {
     value: 'interact',
@@ -136,6 +143,8 @@ export const buildBrowserOrderCommand = (draft: BrowserOrderDraft): BrowserOrder
       return { __fields: [draft.robotId], __tag: 'BrowserExtract' }
     case 'follow':
       return { __fields: [draft.robotId, draft.targetRobotId], __tag: 'BrowserFollow' }
+    case 'hack':
+      return { __fields: [draft.robotId], __tag: 'BrowserHack' }
     case 'hold':
       return { __fields: [draft.robotId], __tag: 'BrowserHold' }
     case 'interact':
