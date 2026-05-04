@@ -16,7 +16,16 @@ t AppBootstrap={
 
 t BoardSummary={
   height:Int,
+  tiles:[BoardTileSummary],
   width:Int
+}
+
+t BoardTileSummary={
+  kind:String,
+  label:String,
+  position:Position,
+  revealed:Bool,
+  walkable:Bool
 }
 
 t BrowserOrderCommand=BrowserAbortMission(String)|BrowserExtract(String)|BrowserFollow(

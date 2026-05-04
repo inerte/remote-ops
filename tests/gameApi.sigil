@@ -97,6 +97,39 @@ test "bootstrap exposes four robots" {
   •gameApi.robotCount()=4
 }
 
+test "bootstrap exposes tactical board tile summaries" {
+  l board=(•gameApi.bootstrap().board:µBoardSummary);
+  board.width=10
+    and board.height=7
+    and #board.tiles=8
+    and (match §list.find(
+      λ(tile:µBoardTileSummary)=>Bool=tile.kind="relay"
+        and tile.label="Relay node"
+        and tile.position={
+          x:1,
+          y:1
+        }
+        and tile.revealed
+        and tile.walkable,
+      board.tiles
+    ){
+      Some(_)=>true|
+      None()=>false
+    })
+    and (match §list.find(
+      λ(tile:µBoardTileSummary)=>Bool=tile.kind="objective"
+        and tile.position={
+          x:8,
+          y:1
+        }
+        and tile.revealed=false,
+      board.tiles
+    ){
+      Some(_)=>true|
+      None()=>false
+    })
+}
+
 test "bootstrap carries deterministic export packets" {
   •gameApi.packetCount()=•packetGenerator.packetCount(•gameState.initialGameState()) and •gameApi.bootstrap().packets=•packetGenerator.generatePackets(•gameState.initialGameState())
 }

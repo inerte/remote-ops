@@ -3,8 +3,27 @@ export interface Position {
   readonly y: number
 }
 
+export type BoardTileKind =
+  | 'duct'
+  | 'door'
+  | 'entry'
+  | 'floor'
+  | 'objective'
+  | 'relay'
+  | 'terminal'
+  | 'wall'
+
+export interface BoardTileSummary {
+  readonly kind: BoardTileKind
+  readonly label: string
+  readonly position: Position
+  readonly revealed: boolean
+  readonly walkable: boolean
+}
+
 export interface BoardSummary {
   readonly height: number
+  readonly tiles: readonly BoardTileSummary[]
   readonly width: number
 }
 

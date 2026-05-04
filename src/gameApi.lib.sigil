@@ -71,8 +71,39 @@
 
 λboardSummary(state:µGameState)=>µBoardSummary={
   height:state.activeMission.facility.height,
+  tiles:boardTileSummaries(state.activeMission.facility.tiles),
   width:state.activeMission.facility.width
 }
+
+λboardTileKindLabel(kind:µFacilityTileKind)=>String match kind{
+  µDuctTile()=>"duct"|
+  µDoorTile(_)=>"door"|
+  µEntryTile()=>"entry"|
+  µFloorTile()=>"floor"|
+  µObjectiveTile(_)=>"objective"|
+  µRelayTile()=>"relay"|
+  µTerminalTile(_)=>"terminal"|
+  µWallTile()=>"wall"
+}
+
+λboardTileLabel(kind:µFacilityTileKind)=>String match kind{
+  µDuctTile()=>"Access duct"|
+  µDoorTile(_)=>"Security door"|
+  µEntryTile()=>"Entry point"|
+  µFloorTile()=>"Operational floor"|
+  µObjectiveTile(_)=>"Mission objective"|
+  µRelayTile()=>"Relay node"|
+  µTerminalTile(_)=>"Network terminal"|
+  µWallTile()=>"Structural wall"
+}
+
+λboardTileSummaries(tiles:[µFacilityTile])=>[µBoardTileSummary]=tiles map (λ(tile:µFacilityTile)=>µBoardTileSummary={
+  kind:boardTileKindLabel(tile.kind),
+  label:boardTileLabel(tile.kind),
+  position:tile.position,
+  revealed:tile.revealed,
+  walkable:tile.walkable
+})
 
 λbootstrap()=>µAppBootstrap=browserShell(bootstrapState())
 
