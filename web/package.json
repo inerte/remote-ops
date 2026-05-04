@@ -1,0 +1,20 @@
+{
+  "name": "web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "sigil:compile": "cd .. && sigil compile src/gameApi.lib.sigil && rm -rf web/src/generated && mkdir -p web/src/generated/core web/src/generated/src web/src/generated/stdlib && cp -f .local/core/*.mjs web/src/generated/core/ && cp -f .local/src/*.mjs web/src/generated/src/ && cp -f .local/stdlib/*.mjs web/src/generated/stdlib/ && printf 'export function bootstrap(): Promise<unknown>;\\n' > web/src/generated/src/gameApi.d.mts",
+    "sigil:test": "cd .. && sigil test",
+    "dev": "npm run sigil:compile && vite",
+    "build": "npm run sigil:compile && tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "^8.0.10"
+  },
+  "dependencies": {
+    "pixi.js": "^8.18.1"
+  }
+}

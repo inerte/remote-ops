@@ -1,0 +1,140 @@
+λalarmLevelDisplay(alarm:µAlarmLevel)=>String=alarmLevelName(alarm)
+  ++" "
+  ++alarmLevelTier(alarm)
+
+λalarmLevelName(alarm:µAlarmLevel)=>String match alarm{
+  µAlarmCounterOperatorTrace()=>"Counter-operator trace"|
+  µAlarmLocal()=>"Local response"|
+  µAlarmLockdown()=>"Lockdown"|
+  µAlarmNormal()=>"Normal"|
+  µAlarmSearch()=>"Search"|
+  µAlarmSuspicion()=>"Suspicion"|
+  µAlarmTacticalResponse()=>"Tactical response"
+}
+
+λalarmLevelTier(alarm:µAlarmLevel)=>String match alarm{
+  µAlarmCounterOperatorTrace()=>"3 / 6"|
+  µAlarmLocal()=>"5 / 6"|
+  µAlarmLockdown()=>"6 / 6"|
+  µAlarmNormal()=>"1 / 6"|
+  µAlarmSearch()=>"4 / 6"|
+  µAlarmSuspicion()=>"2 / 6"|
+  µAlarmTacticalResponse()=>"6 / 6"
+}
+
+λautosavePayload(state:µGameState)=>String=•saveCodecs.stringifySaveFile(•saveApi.createSaveFile(
+  gameVersion(),
+  autosaveSavedAt(),
+  state
+))
+
+λautosaveSavedAt()=>String="2026-05-04T16:00:00Z"
+
+λboardSummary(state:µGameState)=>µBoardSummary={
+  height:state.activeMission.facility.height,
+  width:state.activeMission.facility.width
+}
+
+λbootstrap()=>µAppBootstrap={
+  autosave:autosavePayload(bootstrapState()),
+  board:boardSummary(bootstrapState()),
+  mission:missionSummary(bootstrapState()),
+  nextSteps:nextSteps(),
+  packets:•packetGenerator.generatePackets(bootstrapState()),
+  robots:robotSummaries(bootstrapState().activeMission.robots),
+  tagline:"Illegal operators, disposable hardware, and no punishment for thinking.",
+  title:"Remote Ops"
+}
+
+λbootstrapState()=>µGameState=•gameState.initialGameState()
+
+λcorporationDisplayName(corporationId:µCorporationId)=>String match corporationId{
+  µCorporationId("helixgrid")=>"HelixGrid"|
+  µCorporationId(value)=>value
+}
+
+λgameVersion()=>String="prototype"
+
+λhasLabRoom(rooms:[µRoomState])=>Bool match §list.find(
+  λ(room:µRoomState)=>Bool match room.roomKind{
+    µLab()=>true|
+    _=>false
+  },
+  rooms
+){
+  Some(_)=>true|
+  None()=>false
+}
+
+λmissionClockLabel(clock:Int)=>String="07:"++twoDigit(clock)
+
+λmissionSummary(state:µGameState)=>µMissionSummary={
+  alarmLevel:alarmLevelDisplay(state.activeMission.alarmLevel),
+  corporation:corporationDisplayName(state.activeMission.contract.corporation),
+  missionClock:missionClockLabel(state.activeMission.missionClock),
+  objective:objectiveSummary(state.activeMission),
+  trace:state.activeMission.trace
+}
+
+λnextSteps()=>[String]=[
+  "Promote bootstrap autosave writes into world-action checkpoints.",
+  "Add manual save import once the browser shell can mutate deterministic state.",
+  "Start gameplay controls in the later browser-shell milestone, not in this pass."
+]
+
+λobjectiveSiteLabel(rooms:[µRoomState])=>String match hasLabRoom(rooms){
+  true=>"cold-storage lab"|
+  false=>"facility"
+}
+
+λobjectiveSummary(mission:µMissionState)=>String=mission.contract.label
+  ++" from the "
+  ++objectiveSiteLabel(mission.facility.rooms)
+  ++"."
+
+λpacketCount()=>Int=•packetGenerator.packetCount(bootstrapState())
+
+λrobotArchetypeDisplay(archetype:µRobotArchetype)=>String match archetype{
+  µAtlasBreacher()=>"Atlas Breacher"|
+  µGeckoMicrocrawler()=>"Gecko Microcrawler"|
+  µMiraServiceAndroid()=>"Mira Service Android"|
+  µWispRelayDrone()=>"Wisp Relay Drone"
+}
+
+λrobotCount()=>Int=•gameState.rosterCount(bootstrapState())
+
+λrobotIdDisplay(robotId:µRobotId)=>String match robotId{
+  µRobotId(value)=>value
+}
+
+λrobotSignalDisplay(archetype:µRobotArchetype,signal:Int)=>String match archetype{
+  µWispRelayDrone()=>match signal≥70{
+    true=>"Relay online"|
+    false=>"Unstable"
+  }|
+  _=>match signal≥75{
+    true=>"Stable"|
+    false=>match signal≥60{
+      true=>"Steady"|
+      false=>"Unstable"
+    }
+  }
+}
+
+λrobotSummaries(robots:[µRobotState])=>[µRobotSummary]=robots map (λ(robot:µRobotState)=>µRobotSummary={
+  archetype:robotArchetypeDisplay(robot.archetype),
+  battery:robot.battery,
+  id:robotIdDisplay(robot.id),
+  locationLabel:robot.locationLabel,
+  name:robot.name,
+  position:robot.position,
+  signal:robotSignalDisplay(
+    robot.archetype,
+    robot.signal
+  )
+})
+
+λtwoDigit(value:Int)=>String match value<10{
+  true=>"0"++§string.intToString(value)|
+  false=>§string.intToString(value)
+}

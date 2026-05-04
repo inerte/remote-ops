@@ -1,0 +1,22 @@
+λmain()=>Unit=()
+
+test "bootstrap mission uses HelixGrid" {
+  •gameApi.bootstrap().mission.corporation="HelixGrid"
+}
+
+test "bootstrap exposes four robots" {
+  •gameApi.robotCount()=4
+}
+
+test "bootstrap carries deterministic export packets" {
+  •gameApi.packetCount()=•packetGenerator.packetCount(•gameState.initialGameState()) and •gameApi.bootstrap().packets=•packetGenerator.generatePackets(•gameState.initialGameState())
+}
+
+test "bootstrap exposes canonical autosave payload" {
+  match •saveCodecs.parseSaveFile(•gameApi.bootstrap().autosave){
+    Ok(saveFile)=>saveFile.gameVersion="prototype"
+      and saveFile.savedAt="2026-05-04T16:00:00Z"
+      and saveFile.state=•gameState.initialGameState()|
+    Err(_)=>false
+  }
+}

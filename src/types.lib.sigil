@@ -1,6 +1,7 @@
 t AlarmLevel=AlarmCounterOperatorTrace()|AlarmLocal()|AlarmLockdown()|AlarmNormal()|AlarmSearch()|AlarmSuspicion()|AlarmTacticalResponse()
 
 t AppBootstrap={
+  autosave:String,
   board:BoardSummary,
   mission:MissionSummary,
   nextSteps:[String],
