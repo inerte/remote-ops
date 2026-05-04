@@ -116,9 +116,11 @@ const loadInitialShell = async (): Promise<AppBootstrap> => {
 
 const createDefaultOrderStatus = (shell: AppBootstrap): StatusMessage => ({
   state: 'idle',
-  text: shell.controls.canQueueOrders
-    ? 'Choose a robot, queue a high-level order, then advance the deterministic shell.'
-    : 'High-level order entry unlocks once interrupts are cleared and the mission is still active.',
+  text: shell.debrief.isTerminal
+    ? `${shell.debrief.outcome}. Replay or restore a saved run to issue more orders.`
+    : shell.controls.canQueueOrders
+      ? 'Choose a robot, queue a high-level order, then advance the deterministic shell.'
+      : 'High-level order entry unlocks once interrupts are cleared and the mission is still active.',
 })
 
 const createQueuedOrderStatus = (shell: AppBootstrap): StatusMessage => {
@@ -162,7 +164,15 @@ const main = async (): Promise<void> => {
     const layout = renderLayout(app, shell, orderDraft)
     boardApp = await createBoard(layout.boardHost, shell.board, shell.robots)
 
-    setStatus(layout.actionStatus, shell.controls.status, 'idle')
+    setStatus(
+      layout.actionStatus,
+      shell.controls.status,
+      shell.debrief.tone === 'success'
+        ? 'success'
+        : shell.debrief.tone === 'error'
+          ? 'error'
+          : 'idle',
+    )
     setStatus(layout.orderStatus, orderStatus.text, orderStatus.state)
     setStatus(layout.saveStatus, saveStatus.text, saveStatus.state)
 
@@ -218,6 +228,10 @@ const main = async (): Promise<void> => {
 
     layout.resetButton.addEventListener('click', () => {
       void runWorldAction(() => runResetShell(), 'Resetting mission state…')
+    })
+
+    layout.replayButton.addEventListener('click', () => {
+      void runWorldAction(() => runResetShell(), 'Replaying deterministic opening…')
     })
 
     layout.autosaveButton.addEventListener('click', () => {

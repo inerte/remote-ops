@@ -33,6 +33,21 @@
   _=>filtered⧺[tile]
 }) from []
 
+λhackCycle(shell:µAppBootstrap)=>µAppBootstrap=•gameApi.acknowledgeBrowserShell(hackRound(shell).autosave)
+
+λhackCycles(limit:Int,shell:µAppBootstrap)=>µAppBootstrap match limit{
+  0=>shell|
+  _=>hackCycles(
+    limit-1,
+    hackCycle(shell)
+  )
+}
+
+λhackRound(shell:µAppBootstrap)=>µAppBootstrap=•gameApi.advanceBrowserShell(•gameApi.queueBrowserOrder(
+  shell.autosave,
+  µBrowserHack("mira-1")
+).autosave)
+
 λloadShellState(shell:µAppBootstrap)=>µGameState=•gameApi.loadAutosaveState(shell.autosave)
 
 λmain()=>Unit=()
@@ -238,6 +253,43 @@ test "queueBrowserOrder supports scan interact and extract workflows" {
     and afterInteract.mission.objectiveStatus="atlas-1 secured the package"
     and afterExtract.mission.missionStatus="Extracted"
     and afterExtract.mission.objectiveStatus="Extracted"
+    and afterExtract.controls.canAcknowledge=false
+    and afterExtract.debrief.isTerminal
+    and afterExtract.debrief.outcome="Mission complete"
+    and afterExtract.debrief.tone="success"
+    and §string.contains(
+      afterExtract.debrief.summary,
+      "clean extraction"
+    )
+    and §string.contains(
+      afterExtract.controls.status,
+      "Review the debrief"
+    )
+}
+
+test "repeated hacks trigger deterministic mission failure debrief" {
+  l afterFive=(hackCycles(
+    5,
+    shellFromState(stateWithoutOrders(•gameState.initialGameState()))
+  ):µAppBootstrap);
+  l afterSix=(hackRound(afterFive):µAppBootstrap);
+  afterFive.debrief.isTerminal=false
+    and afterSix.mission.trace=101
+    and §string.contains(
+      afterSix.mission.missionStatus,
+      "Failed:"
+    )
+    and afterSix.debrief.isTerminal
+    and afterSix.debrief.outcome="Mission failed"
+    and afterSix.debrief.tone="error"
+    and afterSix.controls.canAcknowledge=false
+    and afterSix.controls.canAdvance=false
+    and afterSix.controls.canQueueOrders=false
+    and afterSix.mission.queuedOrders=0
+    and §string.contains(
+      afterSix.controls.status,
+      "Review the debrief"
+    )
 }
 
 test "queueBrowserOrder rejects invalid browser commands deterministically" {

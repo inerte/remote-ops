@@ -16,6 +16,15 @@ export interface ControlSummary {
   readonly status: string
 }
 
+export interface DebriefSummary {
+  readonly isTerminal: boolean
+  readonly keyEvents: readonly string[]
+  readonly nextStep: string
+  readonly outcome: string
+  readonly summary: string
+  readonly tone: string
+}
+
 export interface EventEntry {
   readonly message: string
   readonly turn: number
@@ -56,6 +65,7 @@ export interface AppBootstrap {
   readonly autosave: string
   readonly board: BoardSummary
   readonly controls: ControlSummary
+  readonly debrief: DebriefSummary
   readonly eventLog: readonly EventEntry[]
   readonly interrupts: readonly string[]
   readonly mission: MissionSummary

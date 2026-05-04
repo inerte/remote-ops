@@ -27,6 +27,7 @@ interface LayoutHandle {
   readonly orderTypeField: HTMLSelectElement
   readonly packetButtons: NodeListOf<HTMLButtonElement>
   readonly packetStatus: HTMLParagraphElement
+  readonly replayButton: HTMLButtonElement
   readonly resetButton: HTMLButtonElement
   readonly restoreAutosaveButton: HTMLButtonElement
   readonly saveStatus: HTMLParagraphElement
@@ -59,6 +60,10 @@ const eventMarkup = (entry: AppBootstrap['eventLog'][number]): string => `
 
 const interruptMarkup = (interrupt: string): string => `
   <li class="interrupt-entry">${escapeHtml(interrupt)}</li>
+`
+
+const debriefEventMarkup = (message: string): string => `
+  <li class="debrief-event">${escapeHtml(message)}</li>
 `
 
 const optionMarkup = (value: string, label: string, selected: boolean): string => `
@@ -182,11 +187,64 @@ export const renderLayout = (
         </section>
 
         <aside class="sidebar">
+          <section
+            class="panel panel--debrief"
+            data-terminal="${bootstrap.debrief.isTerminal ? 'true' : 'false'}"
+            data-tone="${escapeHtml(bootstrap.debrief.tone)}"
+          >
+            <div class="panel__header">
+              <div>
+                <p class="eyebrow">${bootstrap.debrief.isTerminal ? 'Mission debrief' : 'Mission outlook'}</p>
+                <h2>${escapeHtml(bootstrap.debrief.outcome)}</h2>
+              </div>
+              <span class="debrief-badge">${escapeHtml(bootstrap.mission.missionStatus)}</span>
+            </div>
+            <div class="debrief">
+              <p class="debrief__summary">${escapeHtml(bootstrap.debrief.summary)}</p>
+              <dl class="debrief__stats">
+                <div>
+                  <dt>Clock</dt>
+                  <dd>${escapeHtml(bootstrap.mission.missionClock)}</dd>
+                </div>
+                <div>
+                  <dt>Trace</dt>
+                  <dd>${bootstrap.mission.trace}%</dd>
+                </div>
+                <div>
+                  <dt>Exposure</dt>
+                  <dd>${bootstrap.mission.exposure}</dd>
+                </div>
+                <div>
+                  <dt>Objective</dt>
+                  <dd>${escapeHtml(bootstrap.mission.objectiveStatus)}</dd>
+                </div>
+              </dl>
+              <div class="debrief__events">
+                <p class="field__label">Key events</p>
+                ${
+                  bootstrap.debrief.keyEvents.length === 0
+                    ? '<p class="empty-state">No mission events are available yet.</p>'
+                    : `<ul class="debrief-event-list">${bootstrap.debrief.keyEvents
+                        .map((message) => debriefEventMarkup(message))
+                        .join('')}</ul>`
+                }
+              </div>
+              <p class="debrief__next-step">${escapeHtml(bootstrap.debrief.nextStep)}</p>
+              <div class="save-transfer__actions">
+                <button class="action-button" data-replay-shell type="button">
+                  ${bootstrap.debrief.isTerminal
+                    ? 'Replay deterministic opening'
+                    : 'Reset from opening'}
+                </button>
+              </div>
+            </div>
+          </section>
+
           <section class="panel">
             <div class="panel__header">
               <div>
-                <p class="eyebrow">Command uplink</p>
-                <h2>Mission controls</h2>
+                <p class="eyebrow">${bootstrap.debrief.isTerminal ? 'Mission reset' : 'Command uplink'}</p>
+                <h2>${bootstrap.debrief.isTerminal ? 'Replay controls' : 'Mission controls'}</h2>
               </div>
             </div>
             <div class="control-actions">
@@ -201,7 +259,7 @@ export const renderLayout = (
                 bootstrap.controls.canAcknowledge === false,
               )}
               ${actionButtonMarkup(
-                'Reset mission',
+                bootstrap.debrief.isTerminal ? 'Replay mission from opening' : 'Reset mission',
                 'data-reset-shell',
                 bootstrap.controls.canReset === false,
               )}
@@ -297,14 +355,16 @@ export const renderLayout = (
           <section class="panel">
             <div class="panel__header">
               <div>
-                <p class="eyebrow">Interrupt queue</p>
-                <h2>Current blockers</h2>
+                <p class="eyebrow">${bootstrap.debrief.isTerminal ? 'Mission closeout' : 'Interrupt queue'}</p>
+                <h2>${bootstrap.debrief.isTerminal ? 'Final signals' : 'Current blockers'}</h2>
               </div>
             </div>
             <div class="panel__body">
               ${
                 bootstrap.interrupts.length === 0
-                  ? '<p class="empty-state">No interrupts are blocking the queue.</p>'
+                  ? `<p class="empty-state">${bootstrap.debrief.isTerminal
+                      ? 'Mission closed without any unresolved interrupts.'
+                      : 'No interrupts are blocking the queue.'}</p>`
                   : `<ul class="interrupt-list">${bootstrap.interrupts
                       .map((interrupt) => interruptMarkup(interrupt))
                       .join('')}</ul>`
@@ -423,6 +483,7 @@ export const renderLayout = (
   const orderTargetField = container.querySelector<HTMLSelectElement>('[data-order-target]')
   const orderTypeField = container.querySelector<HTMLSelectElement>('[data-order-type]')
   const packetStatus = container.querySelector<HTMLParagraphElement>('[data-packet-status]')
+  const replayButton = container.querySelector<HTMLButtonElement>('[data-replay-shell]')
   const resetButton = container.querySelector<HTMLButtonElement>('[data-reset-shell]')
   const restoreAutosaveButton =
     container.querySelector<HTMLButtonElement>('[data-restore-autosave]')
@@ -447,6 +508,7 @@ export const renderLayout = (
     orderTargetField === null ||
     orderTypeField === null ||
     packetStatus === null ||
+    replayButton === null ||
     resetButton === null ||
     restoreAutosaveButton === null ||
     saveStatus === null
@@ -474,6 +536,7 @@ export const renderLayout = (
     orderTypeField,
     packetButtons: container.querySelectorAll<HTMLButtonElement>('[data-packet-id]'),
     packetStatus,
+    replayButton,
     resetButton,
     restoreAutosaveButton,
     saveStatus,

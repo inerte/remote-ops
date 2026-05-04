@@ -103,7 +103,7 @@
 }
 
 λbrowserControls(state:µGameState)=>µControlSummary={
-  canAcknowledge:hasPendingInterrupts(state),
+  canAcknowledge:canAcknowledgeInterrupts(state),
   canAdvance:canAdvanceSimulation(state),
   canQueueOrders:canQueueOrders(state),
   canReset:true,
@@ -256,6 +256,7 @@
   autosave:autosavePayload(state),
   board:boardSummary(state),
   controls:browserControls(state),
+  debrief:debriefSummary(state),
   eventLog:state.eventLog,
   interrupts:interruptsForShell(state.activeMission.interrupts),
   mission:missionSummary(state),
@@ -264,6 +265,8 @@
   tagline:"Illegal operators, disposable hardware, and no punishment for thinking.",
   title:"Remote Ops"
 }
+
+λcanAcknowledgeInterrupts(state:µGameState)=>Bool=missionIsInProgress(state.activeMission.status) and hasPendingInterrupts(state)
 
 λcanAdvanceSimulation(state:µGameState)=>Bool match hasPendingInterrupts(state){
   true=>false|
@@ -282,9 +285,11 @@
 }
 
 λcontrolStatus(state:µGameState)=>String match state.activeMission.status{
-  µMissionAborted()=>"Mission aborted. Reset the mission to replay the deterministic opening."|
-  µMissionExtracted()=>"Objective extracted. Reset the mission to replay the deterministic opening."|
-  µMissionFailed(reason)=>"Mission failed: "++reason|
+  µMissionAborted()=>"Mission aborted. Review the debrief or replay the deterministic opening."|
+  µMissionExtracted()=>"Mission complete. Review the debrief, export packets, or replay the deterministic opening."|
+  µMissionFailed(reason)=>"Mission failed: "
+    ++reason
+    ++". Review the debrief or reset to try again."|
   µMissionInProgress()=>match hasPendingInterrupts(state){
     true=>"Interrupts are waiting. Acknowledge them before advancing the simulation."|
     false=>match hasQueuedOrders(state){
@@ -297,6 +302,69 @@
 λcorporationDisplayName(corporationId:µCorporationId)=>String match corporationId{
   µCorporationId("helixgrid")=>"HelixGrid"|
   µCorporationId(value)=>value
+}
+
+λdebriefEventMessages(state:µGameState)=>[String]=takeStrings(
+  3,
+  reverseStrings(state.eventLog map (λ(entry:µEventEntry)=>String=entry.message))
+)
+
+λdebriefNextStep(state:µGameState)=>String match state.activeMission.status{
+  µMissionAborted()=>"Replay the deterministic opener or restore a saved branch if you want to inspect a different outcome."|
+  µMissionExtracted()=>"Replay the deterministic opener, export the packets below, or restore a saved branch to compare another plan."|
+  µMissionFailed(_)=>"Reset to replay the opener, or restore a saved autosave to test a different order stack."|
+  µMissionInProgress()=>match hasPendingInterrupts(state){
+    true=>"Acknowledge the pending interrupts before issuing the next wave of browser orders."|
+    false=>match hasQueuedOrders(state){
+      true=>"Advance to the next interrupt or add another queued order before committing to the branch."|
+      false=>"Queue fresh orders or restore a saved branch before advancing the deterministic shell again."
+    }
+  }
+}
+
+λdebriefOutcome(status:µMissionStatus)=>String match status{
+  µMissionAborted()=>"Mission aborted"|
+  µMissionExtracted()=>"Mission complete"|
+  µMissionFailed(_)=>"Mission failed"|
+  µMissionInProgress()=>"Mission still live"
+}
+
+λdebriefSummary(state:µGameState)=>µDebriefSummary={
+  isTerminal:missionIsTerminal(state.activeMission.status),
+  keyEvents:debriefEventMessages(state),
+  nextStep:debriefNextStep(state),
+  outcome:debriefOutcome(state.activeMission.status),
+  summary:debriefSummaryText(state),
+  tone:debriefTone(state.activeMission.status)
+}
+
+λdebriefSummaryText(state:µGameState)=>String match state.activeMission.status{
+  µMissionAborted()=>"Operators scrubbed the "
+    ++corporationDisplayName(state.activeMission.contract.corporation)
+    ++" "
+    ++objectiveSiteLabel(state.activeMission.facility.rooms)
+    ++" run before extraction."|
+  µMissionExtracted()=>state.activeMission.contract.label
+    ++" concluded with a clean extraction from the "
+    ++objectiveSiteLabel(state.activeMission.facility.rooms)
+    ++"."|
+  µMissionFailed(reason)=>"The "
+    ++corporationDisplayName(state.activeMission.contract.corporation)
+    ++" "
+    ++objectiveSiteLabel(state.activeMission.facility.rooms)
+    ++" run collapsed: "
+    ++reason|
+  µMissionInProgress()=>corporationDisplayName(state.activeMission.contract.corporation)
+    ++" "
+    ++objectiveSiteLabel(state.activeMission.facility.rooms)
+    ++" recovery is still live and waiting on the next operator decision."
+}
+
+λdebriefTone(status:µMissionStatus)=>String match status{
+  µMissionAborted()=>"warning"|
+  µMissionExtracted()=>"success"|
+  µMissionFailed(_)=>"error"|
+  µMissionInProgress()=>"info"
 }
 
 λfindFacilityTile(position:µPosition,state:µGameState)=>Option[µFacilityTile]=§list.find(
@@ -373,6 +441,11 @@
 λmissionIsInProgress(status:µMissionStatus)=>Bool match status{
   µMissionInProgress()=>true|
   _=>false
+}
+
+λmissionIsTerminal(status:µMissionStatus)=>Bool match status{
+  µMissionInProgress()=>false|
+  _=>true
 }
 
 λmissionStatusDisplay(status:µMissionStatus)=>String match status{
@@ -479,6 +552,8 @@
     ++"'.")
 }
 
+λreverseStrings(lines:[String])=>[String]=lines reduce (λ(reversed:[String],line:String)=>[String]=[line]⧺reversed) from []
+
 λrobotArchetypeDisplay(archetype:µRobotArchetype)=>String match archetype{
   µAtlasBreacher()=>"Atlas Breacher"|
   µGeckoMicrocrawler()=>"Gecko Microcrawler"|
@@ -518,6 +593,20 @@
     robot.signal
   )
 })
+
+λtakeStrings(limit:Int,lines:[String])=>[String] match limit{
+  0=>[]|
+  _=>match lines{
+    []=>[]|
+    [
+  head,
+  .tail
+]=>[head]⧺takeStrings(
+      limit-1,
+      tail
+    )
+  }
+}
 
 λtwoDigit(value:Int)=>String match value<10{
   true=>"0"++§string.intToString(value)|

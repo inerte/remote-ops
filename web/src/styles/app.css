@@ -163,7 +163,8 @@ h3 {
 
 .mission-meters dt,
 .board-summary dt,
-.robot-card__stats dt {
+.robot-card__stats dt,
+.debrief__stats dt {
   color: #8ba4d0;
   font-size: 0.78rem;
   text-transform: uppercase;
@@ -171,7 +172,8 @@ h3 {
 }
 
 .mission-meters dd,
-.board-summary dd {
+.board-summary dd,
+.debrief__stats dd {
   margin-top: 8px;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 1rem;
@@ -200,6 +202,110 @@ h3 {
   border-radius: 14px;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid rgba(125, 211, 252, 0.12);
+}
+
+.panel--debrief {
+  overflow: hidden;
+}
+
+.panel--debrief .panel__header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.panel--debrief[data-terminal='true'] {
+  border-color: rgba(125, 211, 252, 0.28);
+}
+
+.panel--debrief[data-tone='success'] {
+  border-color: rgba(34, 197, 94, 0.34);
+}
+
+.panel--debrief[data-tone='error'] {
+  border-color: rgba(248, 113, 113, 0.38);
+}
+
+.panel--debrief[data-tone='warning'] {
+  border-color: rgba(251, 191, 36, 0.36);
+}
+
+.debrief {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.debrief-badge {
+  align-self: start;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(125, 211, 252, 0.12);
+  color: #d8e4ff;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panel--debrief[data-tone='success'] .debrief-badge {
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+}
+
+.panel--debrief[data-tone='error'] .debrief-badge {
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+}
+
+.panel--debrief[data-tone='warning'] .debrief-badge {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+}
+
+.debrief__summary,
+.debrief__next-step {
+  color: #d8e4ff;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.debrief__next-step {
+  color: #9fb2d9;
+}
+
+.debrief__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.debrief__stats div {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(125, 211, 252, 0.12);
+}
+
+.debrief__events {
+  display: grid;
+  gap: 10px;
+}
+
+.debrief-event-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.debrief-event {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  background: rgba(15, 23, 42, 0.72);
+  color: #d8e4ff;
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 
 .control-actions,
@@ -482,11 +588,16 @@ h3 {
   }
 
   .board-summary,
-  .mission-meters {
+  .mission-meters,
+  .debrief__stats {
     grid-template-columns: 1fr;
   }
 
   .order-form__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel--debrief .panel__header {
     grid-template-columns: 1fr;
   }
 

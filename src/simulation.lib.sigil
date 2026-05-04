@@ -290,22 +290,45 @@
 
 λapplyStep(baseInterrupts:[µInterrupt],exposureDelta:Int,message:String,objective:µObjectiveState,orders:[µRobotOrder],robots:[µRobotState],state:µGameState,status:µMissionStatus,traceDelta:Int)=>µGameState={
   activeMission:{
-    alarmLevel:alarmForTrace(state.activeMission.trace+traceDelta),
+    alarmLevel:nextAlarmLevel(
+      state,
+      traceDelta
+    ),
     contract:state.activeMission.contract,
     exposure:state.activeMission.exposure+exposureDelta,
     facility:state.activeMission.facility,
     interrupts:interruptsForStep(
       baseInterrupts,
-      alarmForTrace(state.activeMission.trace+traceDelta),
-      state.activeMission.trace+traceDelta,
+      nextAlarmLevel(
+        state,
+        traceDelta
+      ),
+      nextTrace(
+        state,
+        traceDelta
+      ),
       state
     ),
     missionClock:state.activeMission.missionClock+1,
     objective:objective,
-    orders:orders,
+    orders:remainingOrders(
+      orders,
+      resolvedMissionStatus(
+        state,
+        status,
+        traceDelta
+      )
+    ),
     robots:robots,
-    status:status,
-    trace:state.activeMission.trace+traceDelta
+    status:resolvedMissionStatus(
+      state,
+      status,
+      traceDelta
+    ),
+    trace:nextTrace(
+      state,
+      traceDelta
+    )
   },
   campaign:state.campaign,
   eventLog:appendEvent(
@@ -331,9 +354,37 @@
   state
 )
 
+λmissionIsInProgress(status:µMissionStatus)=>Bool match status{
+  µMissionInProgress()=>true|
+  _=>false
+}
+
+λnextAlarmLevel(state:µGameState,traceDelta:Int)=>µAlarmLevel=alarmForTrace(nextTrace(
+  state,
+  traceDelta
+))
+
+λnextTrace(state:µGameState,traceDelta:Int)=>Int=state.activeMission.trace+traceDelta
+
 λpositionLabel(position:µPosition)=>String=§string.intToString(position.x)
   ++","
   ++§string.intToString(position.y)
+
+λremainingOrders(orders:[µRobotOrder],status:µMissionStatus)=>[µRobotOrder] match missionIsInProgress(status){
+  true=>orders|
+  false=>[]
+}
+
+λresolvedMissionStatus(state:µGameState,status:µMissionStatus,traceDelta:Int)=>µMissionStatus match missionIsInProgress(status){
+  true=>match nextTrace(
+    state,
+    traceDelta
+  )≥95{
+    true=>µMissionFailed("Counter-operators converged on the uplink")|
+    false=>status
+  }|
+  false=>status
+}
 
 λresumeUntilInterrupt(limit:Int,state:µGameState)=>µGameState match limit{
   0=>state|

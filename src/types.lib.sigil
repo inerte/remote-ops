@@ -4,6 +4,7 @@ t AppBootstrap={
   autosave:String,
   board:BoardSummary,
   controls:ControlSummary,
+  debrief:DebriefSummary,
   eventLog:[EventEntry],
   interrupts:[String],
   mission:MissionSummary,
@@ -48,6 +49,15 @@ t ControlSummary={
   canQueueOrders:Bool,
   canReset:Bool,
   status:String
+}
+
+t DebriefSummary={
+  isTerminal:Bool,
+  keyEvents:[String],
+  nextStep:String,
+  outcome:String,
+  summary:String,
+  tone:String
 }
 
 t CorporationId=CorporationId(String)
