@@ -65,7 +65,14 @@ button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
+}
+
+.shell__brand {
+  display: grid;
+  gap: 6px;
+  max-width: 32rem;
+  padding-top: 2px;
 }
 
 .shell__content {
@@ -177,9 +184,9 @@ ul {
 }
 
 h1 {
-  margin-top: 10px;
-  font-size: clamp(2.4rem, 5vw, 4.5rem);
-  line-height: 0.96;
+  margin-top: 0;
+  font-size: clamp(1.95rem, 3.8vw, 3.25rem);
+  line-height: 0.98;
 }
 
 h2 {
@@ -191,17 +198,18 @@ h3 {
 }
 
 .tagline {
-  margin-top: 10px;
-  max-width: 58rem;
+  margin-top: 0;
+  max-width: 36rem;
   color: #9fb2d9;
-  font-size: 1.05rem;
+  font-size: 0.94rem;
+  line-height: 1.45;
 }
 
 .mission-meters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 10px;
-  width: min(680px, 100%);
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+  width: min(620px, 100%);
 }
 
 .mission-meters div {
@@ -224,7 +232,7 @@ h3 {
 .mission-meters dd,
 .board-summary dd,
 .debrief__stats dd {
-  margin-top: 8px;
+  margin-top: 6px;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 1rem;
   color: #f8fbff;
@@ -437,6 +445,41 @@ h3 {
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid rgba(125, 211, 252, 0.12);
+}
+
+.board-mission-controls {
+  display: grid;
+  gap: 8px;
+  margin: 0 14px 14px;
+  padding: 10px 12px 12px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.board-mission-controls__row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.board-mission-controls__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.board-mission-controls__summary {
+  color: #9fb2d9;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.board-mission-controls__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .board-inspector {
@@ -1085,6 +1128,10 @@ h3 {
   padding: 0 12px 12px;
 }
 
+.action-status--board {
+  padding: 0;
+}
+
 .packet-meta {
   padding: 0 14px 8px;
   color: #8ba4d0;
@@ -1234,6 +1281,14 @@ h3 {
   .mission-meters,
   .debrief__stats {
     grid-template-columns: 1fr;
+  }
+
+  .board-mission-controls__row {
+    flex-direction: column;
+  }
+
+  .board-mission-controls__actions {
+    justify-content: flex-start;
   }
 
   .order-form__grid {

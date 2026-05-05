@@ -242,24 +242,22 @@ const main = async (): Promise<void> => {
     orderDraft = createOrderDraft(shell, orderDraft)
     const boardInspector = createBoardInspectorModel(shell, orderDraft, boardSelection)
     const layout = renderLayout(app, shell, orderDraft, boardInspector, sidebarTab)
-    boardApp = await createBoard(
-      layout.boardHost,
-      shell.board,
-      shell.robots,
-      isMissionStage(shell)
-        ? {
-            activeRobotId: orderDraft.robotId,
-            onSelectRobot: (robot) => {
-              boardSelection = { kind: 'robot', robotId: robot.id }
-              orderStatus = {
-                state: 'idle',
-                text: `${robot.name} linked to the board uplink. Use the contextual action panel to issue orders.`,
-              }
-              void render()
-            },
-            onSelectTile: (tile) => {
-              boardSelection = {
-                kind: 'tile',
+      boardApp = await createBoard(
+        layout.boardHost,
+        shell.board,
+        shell.robots,
+        isMissionStage(shell)
+          ? {
+              activeRobotId: orderDraft.robotId,
+              onSelectRobot: (robot) => {
+                setActiveOperator(
+                  robot.id,
+                  `${robot.name} linked to the board uplink and operator strip.`,
+                )
+              },
+              onSelectTile: (tile) => {
+                boardSelection = {
+                  kind: 'tile',
                 position: tile.position,
               }
               orderStatus = {

@@ -285,7 +285,7 @@ const configOptionMarkup = (
 const summaryCardMarkup = (
   eyebrow: string,
   title: string,
-  details: readonly [readonly [string, string], readonly [string, string]],
+  details: readonly (readonly [string, string])[],
   summary: string,
 ): string => `
   <article class="selection-card selection-card--static" data-selected="true">
@@ -295,16 +295,20 @@ const summaryCardMarkup = (
         <h3>${escapeHtml(title)}</h3>
       </div>
     </div>
-    <dl class="selection-card__stats">
-      <div>
-        <dt>${escapeHtml(details[0][0])}</dt>
-        <dd>${escapeHtml(details[0][1])}</dd>
-      </div>
-      <div>
-        <dt>${escapeHtml(details[1][0])}</dt>
-        <dd>${escapeHtml(details[1][1])}</dd>
-      </div>
-    </dl>
+    ${
+      details.length === 0
+        ? ''
+        : `<dl class="selection-card__stats">
+      ${details
+        .map(
+          ([label, value]) => `<div>
+        <dt>${escapeHtml(label)}</dt>
+        <dd>${escapeHtml(value)}</dd>
+      </div>`,
+        )
+        .join('')}
+    </dl>`
+    }
     <p class="selection-card__summary">${escapeHtml(summary)}</p>
   </article>
 `
@@ -354,7 +358,6 @@ export const renderLayout = (
         ['Alarm', bootstrap.mission.alarmLevel],
         ['Trace', `${bootstrap.mission.trace}%`],
         ['Objective', bootstrap.mission.objectiveStatus],
-        ['Mission', bootstrap.mission.missionStatus],
         ['Queued orders', String(bootstrap.mission.queuedOrders)],
       ]
     : [
@@ -409,10 +412,7 @@ export const renderLayout = (
       ${summaryCardMarkup(
         'Entry plan',
         selectedConfig?.label ?? 'Pending plan',
-        [
-          ['Preview clock', bootstrap.mission.missionClock],
-          ['Trace', `${bootstrap.mission.trace}%`],
-        ],
+        [],
         selectedConfig?.summary ?? bootstrap.shell.stageSummary,
       )}
     </div>
@@ -520,7 +520,7 @@ export const renderLayout = (
   container.innerHTML = `
     <div class="shell">
       <header class="shell__header">
-        <div>
+        <div class="shell__brand">
           <p class="eyebrow">Sigil deterministic shell</p>
           <h1>${escapeHtml(bootstrap.title)}</h1>
           <p class="tagline">${escapeHtml(bootstrap.tagline)}</p>
@@ -546,6 +546,31 @@ export const renderLayout = (
           <dl class="board-summary">
             ${boardStats.map(([label, value]) => headerMetricMarkup(label, value)).join('')}
           </dl>
+          <section class="board-mission-controls"${missionStage ? '' : ' hidden'}>
+            <div class="board-mission-controls__row">
+              <div class="board-mission-controls__copy">
+                <p class="eyebrow">Mission controls</p>
+                <p class="board-mission-controls__summary">Advance or clear interrupts without leaving the board.</p>
+              </div>
+              <div class="board-mission-controls__actions">
+                ${actionButtonMarkup(
+                  'Advance to next interrupt',
+                  'data-advance-shell',
+                  bootstrap.controls.canAdvance === false,
+                  missionStage === false,
+                )}
+                ${actionButtonMarkup(
+                  'Acknowledge interrupts',
+                  'data-acknowledge-shell',
+                  bootstrap.controls.canAcknowledge === false,
+                  missionStage === false,
+                )}
+              </div>
+            </div>
+            <p class="action-status action-status--board" data-action-status>
+              ${escapeHtml(bootstrap.controls.status)}
+            </p>
+          </section>
           <div class="board-control-grid"${missionStage ? '' : ' hidden'}>
                   <div class="board-inspector">
                     <div class="operator-strip">
@@ -661,7 +686,7 @@ export const renderLayout = (
         <aside class="sidebar">
           <div class="sidebar-tabs" role="tablist" aria-label="Sidebar panels">
             ${sidebarTabMarkup('mission', 'Mission', sidebarTab === 'mission')}
-            ${sidebarTabMarkup('feed', missionStage ? 'Mission Feed' : 'Briefing Feed', sidebarTab === 'feed')}
+            ${sidebarTabMarkup('feed', 'Feed', sidebarTab === 'feed')}
             ${sidebarTabMarkup('save', 'Settings', sidebarTab === 'save')}
           </div>
 
@@ -794,32 +819,6 @@ export const renderLayout = (
                   missionStage ? bootstrap.debrief.nextStep : bootstrap.controls.status,
                 )}</p>
               </div>
-            </section>
-
-            <section class="panel"${missionStage ? '' : ' hidden'}>
-              <div class="panel__header">
-                <div>
-                  <p class="eyebrow">Mission controls</p>
-                  <h2>Advance the operation</h2>
-                </div>
-              </div>
-              <div class="control-actions">
-                ${actionButtonMarkup(
-                  'Advance to next interrupt',
-                  'data-advance-shell',
-                  bootstrap.controls.canAdvance === false,
-                  missionStage === false,
-                )}
-                ${actionButtonMarkup(
-                  'Acknowledge interrupts',
-                  'data-acknowledge-shell',
-                  bootstrap.controls.canAcknowledge === false,
-                  missionStage === false,
-                )}
-              </div>
-              <p class="action-status" data-action-status>
-                ${escapeHtml(bootstrap.controls.status)}
-              </p>
             </section>
 
             <section class="panel"${missionStage ? '' : ' hidden'}>
