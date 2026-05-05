@@ -12,6 +12,8 @@ import type {
 } from '../app/boardInspector'
 import type { AppBootstrap } from '../app/types'
 
+export type SidebarTab = 'mission' | 'save' | 'feed'
+
 interface LayoutHandle {
   readonly acknowledgeButton: HTMLButtonElement
   readonly autosaveField: HTMLTextAreaElement
@@ -42,6 +44,7 @@ interface LayoutHandle {
   readonly returnToConfigButton: HTMLButtonElement
   readonly returnToLobbyButton: HTMLButtonElement
   readonly saveStatus: HTMLParagraphElement
+  readonly sidebarTabButtons: NodeListOf<HTMLButtonElement>
 }
 
 const escapeHtml = (value: string): string =>
@@ -110,6 +113,44 @@ const orderOptionMarkup = (
 const packetMarkup = (packet: AppBootstrap['packets'][number]): string => `
   <button class="packet-button" data-packet-id="${escapeHtml(packet.id)}" type="button">
     Copy ${escapeHtml(packet.label)}
+  </button>
+`
+
+const quickstartStepMarkup = (
+  index: number,
+  title: string,
+  detail: string,
+): string => `
+  <li class="quickstart-step">
+    <span class="quickstart-step__index">${index}</span>
+    <div class="quickstart-step__body">
+      <p class="quickstart-step__title">${escapeHtml(title)}</p>
+      <p class="quickstart-step__detail">${escapeHtml(detail)}</p>
+    </div>
+  </li>
+`
+
+const sidebarPanelId = (tab: SidebarTab): string => `sidebar-panel-${tab}`
+
+const sidebarTabButtonId = (tab: SidebarTab): string => `sidebar-tab-${tab}`
+
+const sidebarTabMarkup = (
+  tab: SidebarTab,
+  label: string,
+  selected: boolean,
+): string => `
+  <button
+    class="sidebar-tab"
+    data-sidebar-tab="${escapeHtml(tab)}"
+    data-selected="${selected ? 'true' : 'false'}"
+    id="${escapeHtml(sidebarTabButtonId(tab))}"
+    role="tab"
+    aria-controls="${escapeHtml(sidebarPanelId(tab))}"
+    aria-selected="${selected ? 'true' : 'false'}"
+    tabindex="${selected ? '0' : '-1'}"
+    type="button"
+  >
+    ${escapeHtml(label)}
   </button>
 `
 
@@ -277,6 +318,7 @@ export const renderLayout = (
   bootstrap: AppBootstrap,
   orderDraft: BrowserOrderDraft,
   boardInspector: BoardInspectorModel,
+  sidebarTab: SidebarTab,
 ): LayoutHandle => {
   const missionStage = bootstrap.shell.activeStage === 'mission'
   const selectedContract = findSelectedContract(bootstrap)
@@ -330,6 +372,29 @@ export const renderLayout = (
             : `Default entry plan: ${selectedConfig.label}. Open the mission briefing to tune it.`,
         ]
 
+  const missionStageSummaryTiles = `
+    <div class="selection-grid selection-grid--summary">
+      ${summaryCardMarkup(
+        'Selected contract',
+        selectedContract?.label ?? 'Unknown operation',
+        [
+          ['Corporation', selectedContract?.corporation ?? 'Unknown'],
+          ['Risk', selectedContract?.risk ?? 'Unrated'],
+        ],
+        selectedContract?.summary ?? bootstrap.shell.stageSummary,
+      )}
+      ${summaryCardMarkup(
+        'Entry plan',
+        selectedConfig?.label ?? 'Pending plan',
+        [
+          ['Preview clock', bootstrap.mission.missionClock],
+          ['Trace', `${bootstrap.mission.trace}%`],
+        ],
+        selectedConfig?.summary ?? bootstrap.shell.stageSummary,
+      )}
+    </div>
+  `
+
   const flowContent =
     bootstrap.shell.activeStage === 'lobby'
       ? `
@@ -337,40 +402,97 @@ export const renderLayout = (
           ${bootstrap.shell.contractOptions.map((contract) => contractOptionMarkup(contract)).join('')}
         </div>
       `
+      : `
+        <p class="flow-copy">
+          Contract locked: ${escapeHtml(selectedContract?.label ?? 'Unknown operation')} · ${escapeHtml(selectedContract?.corporation ?? 'Unknown corporation')}
+        </p>
+        <div class="selection-grid">
+          ${bootstrap.shell.configOptions.map((option) => configOptionMarkup(option)).join('')}
+        </div>
+      `
+
+  const quickstart =
+    bootstrap.shell.activeStage === 'lobby'
+      ? {
+          title: 'Start the operation',
+          summary:
+            'This prototype starts in the contract lobby, moves through a mission briefing, then drops into the live mission shell.',
+          steps: [
+            [
+              'Pick a contract',
+              'Choose the job package you want to run from the contract cards.',
+            ],
+            [
+              'Open mission briefing',
+              'Move into briefing to lock the contract and expose the entry-plan options.',
+            ],
+            [
+              'Choose an entry plan',
+              'Compare the entry plans and pick the one you want to launch with.',
+            ],
+            [
+              'Launch the mission shell',
+              'Once briefing looks good, launch into the live mission to start issuing orders.',
+            ],
+          ],
+          footer:
+            'After launch, the main loop becomes: inspect the board, queue an order, advance the shell, then react to the next interrupt or outcome.',
+        }
       : bootstrap.shell.activeStage === 'config'
-        ? `
-          <p class="flow-copy">
-            Contract locked: ${escapeHtml(selectedContract?.label ?? 'Unknown operation')} · ${escapeHtml(selectedContract?.corporation ?? 'Unknown corporation')}
-          </p>
-          <div class="selection-grid">
-            ${bootstrap.shell.configOptions.map((option) => configOptionMarkup(option)).join('')}
-          </div>
-        `
-        : `
-          <p class="flow-copy">
-            Mission thread is live. Step back into briefing to replay the opener, or return to the lobby to choose a different contract package.
-          </p>
-          <div class="selection-grid selection-grid--summary">
-            ${summaryCardMarkup(
-              'Selected contract',
-              selectedContract?.label ?? 'Unknown operation',
+        ? {
+            title: 'Brief the mission',
+            summary:
+              'You are one step before live play: lock the entry plan, then launch into the deterministic mission shell.',
+            steps: [
               [
-                ['Corporation', selectedContract?.corporation ?? 'Unknown'],
-                ['Risk', selectedContract?.risk ?? 'Unrated'],
+                'Review the plan effects',
+                'Each briefing option changes the opening posture, so choose the plan you want to test.',
               ],
-              selectedContract?.summary ?? bootstrap.shell.stageSummary,
-            )}
-            ${summaryCardMarkup(
-              'Entry plan',
-              selectedConfig?.label ?? 'Pending plan',
               [
-                ['Preview clock', bootstrap.mission.missionClock],
-                ['Trace', `${bootstrap.mission.trace}%`],
+                'Launch the mission',
+                'Use Launch mission shell to move from briefing into the live operation.',
               ],
-              selectedConfig?.summary ?? bootstrap.shell.stageSummary,
-            )}
-          </div>
-        `
+              [
+                'Use the board and order queue',
+                'Once live, click robots and tiles for contextual actions or use the order form directly.',
+              ],
+              [
+                'Advance after queuing',
+                'Orders do not resolve immediately; once you are live, advance the deterministic shell to play the turn forward.',
+              ],
+            ],
+            footer:
+              'If you want to rethink the setup later, you can replay from briefing without starting from scratch.',
+          }
+        : {
+            title: 'Run the mission loop',
+            summary:
+              'The live prototype is a shell-driven tactics loop: inspect the board, queue high-level orders, advance the sim, then react to the result.',
+            steps: [
+              [
+                'Pick an operator',
+                'Use the Robot dropdown or click a robot on the board to decide who you are commanding right now.',
+              ],
+              [
+                'Inspect the map',
+                'Click tiles and robots on the tactical board to reveal contextual actions in the board uplink.',
+              ],
+              [
+                'Queue a command',
+                'Use board actions or High-level Orders to hold, move, follow, scan, hack, secure, extract, or return to relay.',
+              ],
+              [
+                'Advance the shell',
+                'Press Advance to next interrupt to resolve queued orders and move the mission forward.',
+              ],
+              [
+                'Finish the objective',
+                'Locate the objective, secure it, then extract it before trace and alarm pressure catch up.',
+              ],
+            ],
+            footer:
+              'Good first moves in the current loadout: Gecko is your scanner, Mira is your hacker, then secure and extract once the package is found.',
+          }
 
   container.innerHTML = `
     <div class="shell">
@@ -431,320 +553,422 @@ export const renderLayout = (
         </section>
 
         <aside class="sidebar">
-          <section class="panel">
-            <div class="panel__header">
-              <div>
-                <p class="eyebrow">Pre-mission flow</p>
-                <h2>${escapeHtml(bootstrap.shell.stageTitle)}</h2>
-              </div>
-              <p class="panel__summary">${escapeHtml(bootstrap.shell.stageSummary)}</p>
-            </div>
-            <div class="flow-panel__body">
-              <ol class="stage-track">
-                ${stageStepMarkup(bootstrap.shell.activeStage, 'lobby', 'Contract', 1)}
-                ${stageStepMarkup(bootstrap.shell.activeStage, 'config', 'Briefing', 2)}
-                ${stageStepMarkup(bootstrap.shell.activeStage, 'mission', 'Mission', 3)}
-              </ol>
-              ${flowContent}
-            </div>
-            <div class="selection-actions">
-              ${actionButtonMarkup(
-                'Open mission briefing',
-                'data-open-config',
-                false,
-                bootstrap.shell.activeStage !== 'lobby',
-              )}
-              ${actionButtonMarkup(
-                'Back to contract lobby',
-                'data-return-lobby',
-                false,
-                bootstrap.shell.activeStage === 'lobby',
-                'secondary',
-              )}
-              ${actionButtonMarkup(
-                'Launch mission shell',
-                'data-launch-mission',
-                false,
-                bootstrap.shell.activeStage !== 'config',
-              )}
-              ${actionButtonMarkup(
-                'Replay from mission briefing',
-                'data-return-config',
-                false,
-                bootstrap.shell.activeStage !== 'mission',
-                'secondary',
-              )}
-            </div>
-          </section>
+          <div class="sidebar-tabs" role="tablist" aria-label="Sidebar panels">
+            ${sidebarTabMarkup('mission', 'Mission', sidebarTab === 'mission')}
+            ${sidebarTabMarkup('feed', missionStage ? 'Mission Feed' : 'Briefing Feed', sidebarTab === 'feed')}
+            ${sidebarTabMarkup('save', 'Settings', sidebarTab === 'save')}
+          </div>
 
-          <section
-            class="panel panel--debrief${missionStage ? '' : ' panel--preview'}"
-            data-terminal="${missionStage && bootstrap.debrief.isTerminal ? 'true' : 'false'}"
-            data-tone="${escapeHtml(missionStage ? bootstrap.debrief.tone : 'info')}"
+          <div
+            class="sidebar-view"
+            id="${escapeHtml(sidebarPanelId('mission'))}"
+            role="tabpanel"
+            aria-labelledby="${escapeHtml(sidebarTabButtonId('mission'))}"
+            ${sidebarTab === 'mission' ? '' : 'hidden'}
           >
-            <div class="panel__header">
-              <div>
-                <p class="eyebrow">${missionStage ? (bootstrap.debrief.isTerminal ? 'Mission debrief' : 'Mission outlook') : 'Operation preview'}</p>
-                <h2>${escapeHtml(missionStage ? bootstrap.debrief.outcome : bootstrap.shell.stageTitle)}</h2>
+            ${
+              missionStage
+                ? `
+                  <section class="panel">
+                    <div class="panel__body">
+                      ${missionStageSummaryTiles}
+                    </div>
+                  </section>
+                `
+                : `
+                  <section class="panel">
+                    <div class="panel__header">
+                      <div>
+                        <p class="eyebrow">Pre-mission flow</p>
+                        <h2>${escapeHtml(bootstrap.shell.stageTitle)}</h2>
+                      </div>
+                      <p class="panel__summary">${escapeHtml(bootstrap.shell.stageSummary)}</p>
+                    </div>
+                    <div class="flow-panel__body">
+                      <ol class="stage-track">
+                        ${stageStepMarkup(bootstrap.shell.activeStage, 'lobby', 'Contract', 1)}
+                        ${stageStepMarkup(bootstrap.shell.activeStage, 'config', 'Briefing', 2)}
+                        ${stageStepMarkup(bootstrap.shell.activeStage, 'mission', 'Mission', 3)}
+                      </ol>
+                      ${flowContent}
+                    </div>
+                    <div class="selection-actions">
+                      ${actionButtonMarkup(
+                        'Open mission briefing',
+                        'data-open-config',
+                        false,
+                        bootstrap.shell.activeStage !== 'lobby',
+                      )}
+                      ${actionButtonMarkup(
+                        'Back to contract lobby',
+                        'data-return-lobby',
+                        false,
+                        bootstrap.shell.activeStage === 'lobby',
+                        'secondary',
+                      )}
+                      ${actionButtonMarkup(
+                        'Launch mission shell',
+                        'data-launch-mission',
+                        false,
+                        bootstrap.shell.activeStage !== 'config',
+                      )}
+                      ${actionButtonMarkup(
+                        'Replay from mission briefing',
+                        'data-return-config',
+                        false,
+                        true,
+                        'secondary',
+                      )}
+                    </div>
+                  </section>
+                `
+            }
+
+            <section class="panel">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">How to play</p>
+                  <h2>${escapeHtml(quickstart.title)}</h2>
+                </div>
+                <p class="panel__summary">${escapeHtml(quickstart.summary)}</p>
               </div>
-              <span class="debrief-badge">${escapeHtml(missionStage ? bootstrap.mission.missionStatus : selectedConfig?.label ?? 'Contract selected')}</span>
-            </div>
-            <div class="debrief">
-              <p class="debrief__summary">${escapeHtml(previewSummary)}</p>
-              <dl class="debrief__stats">
+              <div class="quickstart">
+                <ol class="quickstart__steps">
+                  ${quickstart.steps
+                    .map(([title, detail], index) => quickstartStepMarkup(index + 1, title, detail))
+                    .join('')}
+                </ol>
+                <p class="quickstart__footer">${escapeHtml(quickstart.footer)}</p>
+              </div>
+            </section>
+
+            <section
+              class="panel panel--debrief${missionStage ? '' : ' panel--preview'}"
+              data-terminal="${missionStage && bootstrap.debrief.isTerminal ? 'true' : 'false'}"
+              data-tone="${escapeHtml(missionStage ? bootstrap.debrief.tone : 'info')}"
+            >
+              <div class="panel__header">
                 <div>
-                  <dt>${missionStage ? 'Clock' : 'Corporation'}</dt>
-                  <dd>${escapeHtml(missionStage ? bootstrap.mission.missionClock : selectedContract?.corporation ?? 'Unknown')}</dd>
+                  <p class="eyebrow">${missionStage ? (bootstrap.debrief.isTerminal ? 'Mission debrief' : 'Mission outlook') : 'Operation preview'}</p>
+                  <h2>${escapeHtml(missionStage ? bootstrap.debrief.outcome : bootstrap.shell.stageTitle)}</h2>
                 </div>
+                <span class="debrief-badge">${escapeHtml(missionStage ? bootstrap.mission.missionStatus : selectedConfig?.label ?? 'Contract selected')}</span>
+              </div>
+              <div class="debrief">
+                <p class="debrief__summary">${escapeHtml(previewSummary)}</p>
+                <dl class="debrief__stats">
+                  <div>
+                    <dt>${missionStage ? 'Clock' : 'Corporation'}</dt>
+                    <dd>${escapeHtml(missionStage ? bootstrap.mission.missionClock : selectedContract?.corporation ?? 'Unknown')}</dd>
+                  </div>
+                  <div>
+                    <dt>${missionStage ? 'Trace' : 'Objective'}</dt>
+                    <dd>${escapeHtml(missionStage ? `${bootstrap.mission.trace}%` : selectedContract?.objective ?? 'Unknown')}</dd>
+                  </div>
+                  <div>
+                    <dt>${missionStage ? 'Exposure' : 'Risk'}</dt>
+                    <dd>${escapeHtml(missionStage ? String(bootstrap.mission.exposure) : selectedContract?.risk ?? 'Unrated')}</dd>
+                  </div>
+                  <div>
+                    <dt>${missionStage ? 'Objective' : 'Entry plan'}</dt>
+                    <dd>${escapeHtml(missionStage ? bootstrap.mission.objectiveStatus : selectedConfig?.label ?? 'Pending')}</dd>
+                  </div>
+                </dl>
+                <div class="debrief__events">
+                  <p class="field__label">${missionStage ? 'Key events' : bootstrap.shell.activeStage === 'config' ? 'Entry plan effects' : 'Operation notes'}</p>
+                  ${
+                    previewItems.length === 0
+                      ? '<p class="empty-state">No mission events are available yet.</p>'
+                      : `<ul class="debrief-event-list">${previewItems
+                          .map((message) => debriefEventMarkup(message))
+                          .join('')}</ul>`
+                  }
+                </div>
+                <p class="debrief__next-step">${escapeHtml(
+                  missionStage ? bootstrap.debrief.nextStep : bootstrap.controls.status,
+                )}</p>
+              </div>
+            </section>
+
+            <section class="panel"${missionStage ? '' : ' hidden'}>
+              <div class="panel__header">
                 <div>
-                  <dt>${missionStage ? 'Trace' : 'Objective'}</dt>
-                  <dd>${escapeHtml(missionStage ? `${bootstrap.mission.trace}%` : selectedContract?.objective ?? 'Unknown')}</dd>
+                  <p class="eyebrow">Mission controls</p>
+                  <h2>Advance the operation</h2>
                 </div>
+              </div>
+              <div class="control-actions">
+                ${actionButtonMarkup(
+                  'Advance to next interrupt',
+                  'data-advance-shell',
+                  bootstrap.controls.canAdvance === false,
+                  missionStage === false,
+                )}
+                ${actionButtonMarkup(
+                  'Acknowledge interrupts',
+                  'data-acknowledge-shell',
+                  bootstrap.controls.canAcknowledge === false,
+                  missionStage === false,
+                )}
+              </div>
+              <p class="action-status" data-action-status>
+                ${escapeHtml(bootstrap.controls.status)}
+              </p>
+            </section>
+
+            <section class="panel"${missionStage ? '' : ' hidden'}>
+              <div class="panel__header">
                 <div>
-                  <dt>${missionStage ? 'Exposure' : 'Risk'}</dt>
-                  <dd>${escapeHtml(missionStage ? String(bootstrap.mission.exposure) : selectedContract?.risk ?? 'Unrated')}</dd>
+                  <p class="eyebrow">High-level orders</p>
+                  <h2>Queue robot action</h2>
                 </div>
+              </div>
+              <form class="order-form" data-order-form>
+                <div class="order-form__grid">
+                  <label class="field">
+                    <span class="field__label">Robot</span>
+                    <select class="field__control" data-order-robot>
+                      ${bootstrap.robots
+                        .map((robot) => robotOptionMarkup(robot, orderDraft.robotId))
+                        .join('')}
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field__label">Order</span>
+                    <select class="field__control" data-order-type>
+                      ${ORDER_OPTIONS.map((option) => orderOptionMarkup(option, orderDraft.orderType)).join('')}
+                    </select>
+                  </label>
+                </div>
+                <div class="field" data-order-follow-field${orderTypeNeedsTargetRobot(orderDraft.orderType) ? '' : ' hidden'}>
+                  <label class="field__stack">
+                    <span class="field__label">Follow target</span>
+                    <select class="field__control" data-order-target>
+                      ${followTargets
+                        .map((robot) => robotOptionMarkup(robot, orderDraft.targetRobotId))
+                        .join('')}
+                    </select>
+                  </label>
+                </div>
+                <div class="order-form__grid" data-order-move-fields${orderTypeNeedsPosition(orderDraft.orderType) ? '' : ' hidden'}>
+                  <label class="field">
+                    <span class="field__label">Grid X</span>
+                    <input
+                      class="field__control"
+                      data-order-move-x
+                      inputmode="numeric"
+                      max="${bootstrap.board.width - 1}"
+                      min="0"
+                      type="number"
+                      value="${escapeHtml(orderDraft.moveX)}"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">Grid Y</span>
+                    <input
+                      class="field__control"
+                      data-order-move-y
+                      inputmode="numeric"
+                      max="${bootstrap.board.height - 1}"
+                      min="0"
+                      type="number"
+                      value="${escapeHtml(orderDraft.moveY)}"
+                    />
+                  </label>
+                </div>
+                <p class="order-form__hint" data-order-hint>
+                  ${escapeHtml(orderTypeDescription(orderDraft.orderType))}
+                </p>
+                <p class="packet-meta">
+                  Move orders use packet-grid coordinates (0-based x,y), and the target must be a
+                  real board tile. Empty gaps and blocked tiles are invalid, so clicking a tile on
+                  the tactical board is usually easier.
+                </p>
+                <div class="save-transfer__actions">
+                  <button
+                    class="action-button"
+                    data-submit-order
+                    type="submit"
+                    ${bootstrap.controls.canQueueOrders ? '' : 'disabled'}
+                  >
+                    Queue selected order
+                  </button>
+                </div>
+              </form>
+              <p class="action-status" data-order-status>
+                Orders queued here are appended to the deterministic mission stack.
+              </p>
+            </section>
+
+            <section class="panel"${missionStage ? '' : ' hidden'}>
+              <div class="panel__header">
                 <div>
-                  <dt>${missionStage ? 'Objective' : 'Entry plan'}</dt>
-                  <dd>${escapeHtml(missionStage ? bootstrap.mission.objectiveStatus : selectedConfig?.label ?? 'Pending')}</dd>
+                  <p class="eyebrow">Interrupt queue</p>
+                  <h2>Current blockers</h2>
                 </div>
-              </dl>
-              <div class="debrief__events">
-                <p class="field__label">${missionStage ? 'Key events' : bootstrap.shell.activeStage === 'config' ? 'Entry plan effects' : 'Operation notes'}</p>
+              </div>
+              <div class="panel__body">
                 ${
-                  previewItems.length === 0
-                    ? '<p class="empty-state">No mission events are available yet.</p>'
-                    : `<ul class="debrief-event-list">${previewItems
-                        .map((message) => debriefEventMarkup(message))
+                  bootstrap.interrupts.length === 0
+                    ? '<p class="empty-state">No interrupts are blocking the queue.</p>'
+                    : `<ul class="interrupt-list">${bootstrap.interrupts
+                        .map((interrupt) => interruptMarkup(interrupt))
                         .join('')}</ul>`
                 }
               </div>
-              <p class="debrief__next-step">${escapeHtml(
-                missionStage ? bootstrap.debrief.nextStep : bootstrap.controls.status,
-              )}</p>
-            </div>
-          </section>
+            </section>
 
-          <section class="panel">
-            <div class="panel__header">
-              <div>
-                <p class="eyebrow">${missionStage ? 'Command uplink' : 'Shell controls'}</p>
-                <h2>${missionStage ? 'Mission controls' : 'Reset and restore'}</h2>
+            <section class="panel">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">Robot roster</p>
+                  <h2>Operators online</h2>
+                </div>
               </div>
-            </div>
-            <div class="control-actions">
-              ${actionButtonMarkup(
-                'Advance to next interrupt',
-                'data-advance-shell',
-                bootstrap.controls.canAdvance === false,
-                missionStage === false,
-              )}
-              ${actionButtonMarkup(
-                'Acknowledge interrupts',
-                'data-acknowledge-shell',
-                bootstrap.controls.canAcknowledge === false,
-                missionStage === false,
-              )}
-              ${actionButtonMarkup(
-                'Reset shell to default lobby',
-                'data-reset-shell',
-                bootstrap.controls.canReset === false,
-                false,
-                'secondary',
-              )}
-            </div>
-            <p class="action-status" data-action-status>
-              ${escapeHtml(bootstrap.controls.status)}
-            </p>
-          </section>
+              <div class="robot-list">
+                ${bootstrap.robots.map((robot) => robotMarkup(robot)).join('')}
+              </div>
+            </section>
 
-          <section class="panel"${missionStage ? '' : ' hidden'}>
-            <div class="panel__header">
-              <div>
-                <p class="eyebrow">High-level orders</p>
-                <h2>Queue robot action</h2>
+            <section class="panel">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">Export payloads</p>
+                  <h2>Manual AI handoff</h2>
+                </div>
               </div>
-            </div>
-            <form class="order-form" data-order-form>
-              <div class="order-form__grid">
-                <label class="field">
-                  <span class="field__label">Robot</span>
-                  <select class="field__control" data-order-robot>
-                    ${bootstrap.robots
-                      .map((robot) => robotOptionMarkup(robot, orderDraft.robotId))
-                      .join('')}
-                  </select>
-                </label>
-                <label class="field">
-                  <span class="field__label">Order</span>
-                  <select class="field__control" data-order-type>
-                    ${ORDER_OPTIONS.map((option) => orderOptionMarkup(option, orderDraft.orderType)).join('')}
-                  </select>
-                </label>
+              <div class="packet-list">
+                ${bootstrap.packets.map((packet) => packetMarkup(packet)).join('')}
+                <button class="packet-button" data-copy-autosave type="button">
+                  Copy autosave payload
+                </button>
               </div>
-              <div class="field" data-order-follow-field${orderTypeNeedsTargetRobot(orderDraft.orderType) ? '' : ' hidden'}>
-                <label class="field__stack">
-                  <span class="field__label">Follow target</span>
-                  <select class="field__control" data-order-target>
-                    ${followTargets
-                      .map((robot) => robotOptionMarkup(robot, orderDraft.targetRobotId))
-                      .join('')}
-                  </select>
-                </label>
-              </div>
-              <div class="order-form__grid" data-order-move-fields${orderTypeNeedsPosition(orderDraft.orderType) ? '' : ' hidden'}>
-                <label class="field">
-                  <span class="field__label">Grid X</span>
-                  <input
-                    class="field__control"
-                    data-order-move-x
-                    inputmode="numeric"
-                    max="${bootstrap.board.width - 1}"
-                    min="0"
-                    type="number"
-                    value="${escapeHtml(orderDraft.moveX)}"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field__label">Grid Y</span>
-                  <input
-                    class="field__control"
-                    data-order-move-y
-                    inputmode="numeric"
-                    max="${bootstrap.board.height - 1}"
-                    min="0"
-                    type="number"
-                    value="${escapeHtml(orderDraft.moveY)}"
-                  />
-                </label>
-              </div>
-              <p class="order-form__hint" data-order-hint>
-                ${escapeHtml(orderTypeDescription(orderDraft.orderType))}
-              </p>
               <p class="packet-meta">
-                Move orders use the packet-grid coordinate system (0-based x,y) already used by
-                the deterministic shell.
+                Canonical autosave payload (${bootstrap.autosave.length} chars) is refreshed from
+                deterministic Sigil state after every world action.
               </p>
-              <div class="save-transfer__actions">
-                <button
-                  class="action-button"
-                  data-submit-order
-                  type="submit"
-                  ${bootstrap.controls.canQueueOrders ? '' : 'disabled'}
-                >
-                  Queue selected order
-                </button>
-              </div>
-            </form>
-            <p class="action-status" data-order-status>
-              Orders queued here are appended to the deterministic mission stack.
-            </p>
-          </section>
-
-          <section class="panel"${missionStage ? '' : ' hidden'}>
-            <div class="panel__header">
-              <div>
-                <p class="eyebrow">Interrupt queue</p>
-                <h2>Current blockers</h2>
-              </div>
-            </div>
-            <div class="panel__body">
-              ${
-                bootstrap.interrupts.length === 0
-                  ? '<p class="empty-state">No interrupts are blocking the queue.</p>'
-                  : `<ul class="interrupt-list">${bootstrap.interrupts
-                      .map((interrupt) => interruptMarkup(interrupt))
-                      .join('')}</ul>`
-              }
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel__header">
-              <div>
-                <p class="eyebrow">Robot roster</p>
-                <h2>Operators online</h2>
-              </div>
-            </div>
-            <div class="robot-list">
-              ${bootstrap.robots.map((robot) => robotMarkup(robot)).join('')}
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel__header">
-              <div>
-                <p class="eyebrow">Export payloads</p>
-                <h2>Manual AI handoff</h2>
-              </div>
-            </div>
-            <div class="packet-list">
-              ${bootstrap.packets.map((packet) => packetMarkup(packet)).join('')}
-              <button class="packet-button" data-copy-autosave type="button">
-                Copy autosave payload
-              </button>
-            </div>
-            <p class="packet-meta">
-              Canonical autosave payload (${bootstrap.autosave.length} chars) is refreshed from
-              deterministic Sigil state after every world action.
-            </p>
-            <p class="packet-status" data-packet-status>
-              Copying packets is free; world state stays deterministic.
-            </p>
-          </section>
-
-          <section class="panel">
-            <div class="panel__header">
-              <div>
-                <p class="eyebrow">Canonical autosave</p>
-                <h2>Manual save / restore</h2>
-              </div>
-            </div>
-            <div class="save-transfer">
-              <p class="save-transfer__hint">
-                The current autosave payload is mirrored here for manual backup or paste restore.
+              <p class="packet-status" data-packet-status>
+                Copying packets is free; world state stays deterministic.
               </p>
-              <label class="save-transfer__label" for="autosave-transfer-field">
-                Current deterministic payload
-              </label>
-              <textarea
-                class="save-transfer__editor"
-                data-autosave-field
-                id="autosave-transfer-field"
-                rows="8"
-                spellcheck="false"
-              >${escapeHtml(bootstrap.autosave)}</textarea>
-              <div class="save-transfer__actions">
-                <button class="action-button" data-restore-autosave type="button">
-                  Restore pasted autosave
-                </button>
-              </div>
-            </div>
-            <p class="packet-meta">
-              Restoring a payload immediately re-syncs the canonical local autosave used by the
-              browser shell.
-            </p>
-            <p class="packet-status" data-save-status>
-              Paste a canonical autosave payload here, then restore it into the browser shell.
-            </p>
-          </section>
+            </section>
+          </div>
 
-          <section class="panel">
-            <div class="panel__header">
-              <div>
-                <p class="eyebrow">${missionStage ? 'Recent event log' : 'Operation log'}</p>
-                <h2>${missionStage ? 'Mission feed' : 'Briefing feed'}</h2>
+          <div
+            class="sidebar-view"
+            id="${escapeHtml(sidebarPanelId('save'))}"
+            role="tabpanel"
+            aria-labelledby="${escapeHtml(sidebarTabButtonId('save'))}"
+            ${sidebarTab === 'save' ? '' : 'hidden'}
+          >
+            <section class="panel">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">Shell controls</p>
+                  <h2>Reset and navigation</h2>
+                </div>
               </div>
-            </div>
-            <div class="panel__body">
-              <ol class="event-list">
-                ${[...bootstrap.eventLog]
-                  .reverse()
-                  .map((entry) => eventMarkup(entry))
-                  .join('')}
-              </ol>
-            </div>
-          </section>
+              <div class="control-actions">
+                ${actionButtonMarkup(
+                  'Reset shell to default lobby',
+                  'data-reset-shell',
+                  bootstrap.controls.canReset === false,
+                  false,
+                  'secondary',
+                )}
+                ${
+                  missionStage
+                    ? `${actionButtonMarkup(
+                        'Open mission briefing',
+                        'data-open-config',
+                        false,
+                        true,
+                      )}
+                      ${actionButtonMarkup(
+                        'Back to contract lobby',
+                        'data-return-lobby',
+                        false,
+                        false,
+                        'secondary',
+                      )}
+                      ${actionButtonMarkup(
+                        'Launch mission shell',
+                        'data-launch-mission',
+                        false,
+                        true,
+                      )}
+                      ${actionButtonMarkup(
+                        'Replay from mission briefing',
+                        'data-return-config',
+                        false,
+                        false,
+                        'secondary',
+                      )}`
+                    : ''
+                }
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">Canonical autosave</p>
+                  <h2>Manual save / restore</h2>
+                </div>
+              </div>
+              <div class="save-transfer">
+                <p class="save-transfer__hint">
+                  The current autosave payload is mirrored here for manual backup or paste restore.
+                </p>
+                <label class="save-transfer__label" for="autosave-transfer-field">
+                  Current deterministic payload
+                </label>
+                <textarea
+                  class="save-transfer__editor"
+                  data-autosave-field
+                  id="autosave-transfer-field"
+                  rows="8"
+                  spellcheck="false"
+                >${escapeHtml(bootstrap.autosave)}</textarea>
+                <div class="save-transfer__actions">
+                  <button class="action-button" data-restore-autosave type="button">
+                    Restore pasted autosave
+                  </button>
+                </div>
+              </div>
+              <p class="packet-meta">
+                Restoring a payload immediately re-syncs the canonical local autosave used by the
+                browser shell.
+              </p>
+              <p class="packet-status" data-save-status>
+                Paste a canonical autosave payload here, then restore it into the browser shell.
+              </p>
+            </section>
+          </div>
+
+          <div
+            class="sidebar-view"
+            id="${escapeHtml(sidebarPanelId('feed'))}"
+            role="tabpanel"
+            aria-labelledby="${escapeHtml(sidebarTabButtonId('feed'))}"
+            ${sidebarTab === 'feed' ? '' : 'hidden'}
+          >
+            <section class="panel">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">${missionStage ? 'Recent event log' : 'Operation log'}</p>
+                  <h2>${missionStage ? 'Mission feed' : 'Briefing feed'}</h2>
+                </div>
+              </div>
+              <div class="panel__body">
+                <ol class="event-list">
+                  ${[...bootstrap.eventLog]
+                    .reverse()
+                    .map((entry) => eventMarkup(entry))
+                    .join('')}
+                </ol>
+              </div>
+            </section>
+          </div>
         </aside>
       </main>
     </div>
@@ -841,5 +1065,6 @@ export const renderLayout = (
     returnToConfigButton,
     returnToLobbyButton,
     saveStatus,
+    sidebarTabButtons: container.querySelectorAll<HTMLButtonElement>('[data-sidebar-tab]'),
   }
 }

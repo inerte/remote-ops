@@ -30,7 +30,7 @@ import {
 import type { AppBootstrap } from './app/types'
 import { createBoard } from './renderer/board'
 import './styles/app.css'
-import { renderLayout } from './ui/layout'
+import { renderLayout, type SidebarTab } from './ui/layout'
 
 const AUTOSAVE_STORAGE_KEY = 'remote-ops.autosave'
 
@@ -168,12 +168,43 @@ const createDefaultOrderStatus = (shell: AppBootstrap): StatusMessage => {
   }
 }
 
+const humanizeRejectedOrder = (shell: AppBootstrap, eventMessage: string): string => {
+  const match = /^Order rejected: ([^ ]+) -> ([^|]+?)(?: \| (.+))?$/.exec(eventMessage)
+  if (match === null) {
+    return eventMessage
+  }
+
+  const [, robotId, , rawReason] = match
+  const robotName = shell.robots.find((candidate) => candidate.id === robotId)?.name ?? robotId
+  const reason = rawReason?.trim()
+
+  if (reason === undefined || reason.length === 0) {
+    return `${robotName}'s order was rejected.`
+  }
+
+  const offMapMoveMatch = /^Move target (-?\d+),(-?\d+) is not part of the mission map\.$/.exec(
+    reason,
+  )
+  if (offMapMoveMatch !== null) {
+    const [, x, y] = offMapMoveMatch
+    return `${robotName} can't move to ${x},${y} — that coordinate is an empty gap, not a real mission tile. Try clicking a tile on the tactical board instead of typing the move.`
+  }
+
+  const blockedMoveMatch = /^Move target (-?\d+),(-?\d+) is not walkable\.$/.exec(reason)
+  if (blockedMoveMatch !== null) {
+    const [, x, y] = blockedMoveMatch
+    return `${robotName} can't move to ${x},${y} — that tile exists, but it is blocked and not walkable.`
+  }
+
+  return `${robotName}'s order was rejected: ${reason}`
+}
+
 const createQueuedOrderStatus = (shell: AppBootstrap): StatusMessage => {
   const latestEvent = shell.eventLog.at(-1)?.message
   if (latestEvent?.startsWith('Order rejected:')) {
     return {
       state: 'error',
-      text: latestEvent,
+      text: humanizeRejectedOrder(shell, latestEvent),
     }
   }
 
@@ -202,6 +233,7 @@ const main = async (): Promise<void> => {
   let boardSelection: BoardSelection = NO_BOARD_SELECTION
   let orderStatus = createDefaultOrderStatus(shell)
   let saveStatus = createSaveStatus(shell.autosave)
+  let sidebarTab: SidebarTab = 'mission'
 
   const render = async (): Promise<void> => {
     boardApp?.destroy()
@@ -209,7 +241,7 @@ const main = async (): Promise<void> => {
     boardSelection = isMissionStage(shell) ? normalizeBoardSelection(shell, boardSelection) : NO_BOARD_SELECTION
     orderDraft = createOrderDraft(shell, orderDraft)
     const boardInspector = createBoardInspectorModel(shell, orderDraft, boardSelection)
-    const layout = renderLayout(app, shell, orderDraft, boardInspector)
+    const layout = renderLayout(app, shell, orderDraft, boardInspector, sidebarTab)
     boardApp = await createBoard(
       layout.boardHost,
       shell.board,
@@ -426,6 +458,22 @@ const main = async (): Promise<void> => {
         }
       })()
     })
+
+    for (const button of layout.sidebarTabButtons) {
+      button.addEventListener('click', () => {
+        const nextTab = button.dataset.sidebarTab as SidebarTab | undefined
+        if (nextTab === undefined) {
+          throw new Error('Sidebar tab is missing its data-sidebar-tab attribute.')
+        }
+
+        if (nextTab === sidebarTab) {
+          return
+        }
+
+        sidebarTab = nextTab
+        void render()
+      })
+    }
 
     layout.orderRobotField.addEventListener('change', () => {
       refreshDraftFromLayout()

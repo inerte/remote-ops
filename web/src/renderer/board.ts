@@ -463,6 +463,12 @@ export const createBoard = async (
     positionTooltip(centerX, centerY)
   }
 
+  const clearTooltip = (): void => {
+    activeHotspot?.removeAttribute('data-active')
+    activeHotspot = null
+    tooltip.dataset.visible = 'false'
+  }
+
   const showRobotTooltip = (
     robot: RobotSummary,
     tile: BoardTileSummary | undefined,
@@ -555,10 +561,20 @@ export const createBoard = async (
       return
     }
 
-    hotspot.removeAttribute('data-active')
-    activeHotspot = null
-    tooltip.dataset.visible = 'false'
+    clearTooltip()
   }
+
+  const scheduleHideTooltip = (hotspot: HTMLButtonElement): void => {
+    requestAnimationFrame(() => {
+      hideTooltip(hotspot)
+    })
+  }
+
+  wrapper.addEventListener('pointerleave', () => {
+    if (activeHotspot !== null && document.activeElement !== activeHotspot) {
+      clearTooltip()
+    }
+  })
 
   for (const tile of board.tiles) {
     const centerX = originX + tile.position.x * tileSize + tileSize / 2
@@ -586,10 +602,10 @@ export const createBoard = async (
       showTileTooltip(tile, centerX, centerY, hotspot)
     })
     hotspot.addEventListener('pointerleave', () => {
-      hideTooltip(hotspot)
+      scheduleHideTooltip(hotspot)
     })
     hotspot.addEventListener('blur', () => {
-      hideTooltip(hotspot)
+      scheduleHideTooltip(hotspot)
     })
     hotspot.addEventListener('click', () => {
       interaction?.onSelectTile?.(tile)
@@ -676,10 +692,10 @@ export const createBoard = async (
       showRobotTooltip(robot, tile, centerX, centerY, hotspot)
     })
     hotspot.addEventListener('pointerleave', () => {
-      hideTooltip(hotspot)
+      scheduleHideTooltip(hotspot)
     })
     hotspot.addEventListener('blur', () => {
-      hideTooltip(hotspot)
+      scheduleHideTooltip(hotspot)
     })
     hotspot.addEventListener('click', () => {
       interaction?.onSelectRobot?.(robot)

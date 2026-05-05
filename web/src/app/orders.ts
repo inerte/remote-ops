@@ -48,7 +48,8 @@ export const ORDER_OPTIONS: readonly BrowserOrderOption[] = [
   {
     value: 'move',
     label: 'Move to grid',
-    description: 'Send the selected robot to an explicit packet-grid coordinate.',
+    description:
+      'Send the selected robot to a packet-grid coordinate that matches a real board tile.',
   },
   {
     value: 'follow',
