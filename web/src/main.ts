@@ -162,7 +162,7 @@ const createDefaultOrderStatus = (shell: AppBootstrap): StatusMessage => {
         text: shell.debrief.isTerminal
           ? `${shell.debrief.outcome}. Replay from briefing or restore a saved run to issue more orders.`
           : shell.controls.canQueueOrders
-            ? 'Choose a robot, queue a high-level order, then advance the deterministic shell.'
+            ? 'Pick an operator from the board uplink strip, queue a high-level order, then advance the deterministic shell.'
             : 'High-level order entry unlocks once interrupts are cleared and the mission is still active.',
       }
   }
@@ -291,9 +291,26 @@ const main = async (): Promise<void> => {
         moveX: layout.orderMoveXField.value,
         moveY: layout.orderMoveYField.value,
         orderType: layout.orderTypeField.value as BrowserShellOrderType,
-        robotId: layout.orderRobotField.value,
         targetRobotId: layout.orderTargetField.value,
       })
+    }
+
+    const setActiveOperator = (robotId: string, statusText?: string): void => {
+      const robot = shell.robots.find((candidate) => candidate.id === robotId)
+      if (robot === undefined) {
+        throw new Error(`Unknown board operator requested: ${robotId}`)
+      }
+
+      orderDraft = createOrderDraft(shell, {
+        ...orderDraft,
+        robotId,
+      })
+      boardSelection = { kind: 'robot', robotId }
+      orderStatus = {
+        state: 'success',
+        text: statusText ?? `${robot.name} is now the active board operator.`,
+      }
+      void render()
     }
 
     const queueDraftOrder = async (
@@ -475,11 +492,25 @@ const main = async (): Promise<void> => {
       })
     }
 
-    layout.orderRobotField.addEventListener('change', () => {
-      refreshDraftFromLayout()
-      layout.orderTargetField.value = orderDraft.targetRobotId
-      void render()
-    })
+    for (const button of layout.operatorButtons) {
+      button.addEventListener('click', () => {
+        const robotId = button.dataset.operatorRobot
+        if (robotId === undefined) {
+          throw new Error('Operator switch is missing its data-operator-robot attribute.')
+        }
+
+        if (robotId === orderDraft.robotId) {
+          return
+        }
+
+        const robot = shell.robots.find((candidate) => candidate.id === robotId)
+        if (robot === undefined) {
+          throw new Error(`Unknown board operator requested: ${robotId}`)
+        }
+
+        setActiveOperator(robotId, `${robot.name} linked to the board uplink and manual order queue.`)
+      })
+    }
 
     layout.orderTypeField.addEventListener('change', () => {
       refreshDraftFromLayout()
@@ -521,18 +552,7 @@ const main = async (): Promise<void> => {
             throw new Error('Board operator action is missing its data-board-robot-id attribute.')
           }
 
-          const robot = shell.robots.find((candidate) => candidate.id === robotId)
-          if (robot === undefined) {
-            throw new Error(`Unknown board operator requested: ${robotId}`)
-          }
-
-          orderDraft = createOrderDraft(shell, { robotId })
-          boardSelection = { kind: 'robot', robotId }
-          orderStatus = {
-            state: 'success',
-            text: `${robot.name} is now the active board operator.`,
-          }
-          void render()
+          setActiveOperator(robotId)
           return
         }
 

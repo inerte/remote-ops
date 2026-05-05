@@ -25,6 +25,7 @@ interface LayoutHandle {
   readonly configButtons: NodeListOf<HTMLButtonElement>
   readonly contractButtons: NodeListOf<HTMLButtonElement>
   readonly launchMissionButton: HTMLButtonElement
+  readonly operatorButtons: NodeListOf<HTMLButtonElement>
   readonly openConfigButton: HTMLButtonElement
   readonly orderFollowField: HTMLDivElement
   readonly orderForm: HTMLFormElement
@@ -32,7 +33,6 @@ interface LayoutHandle {
   readonly orderMoveFields: HTMLDivElement
   readonly orderMoveXField: HTMLInputElement
   readonly orderMoveYField: HTMLInputElement
-  readonly orderRobotField: HTMLSelectElement
   readonly orderStatus: HTMLParagraphElement
   readonly orderSubmitButton: HTMLButtonElement
   readonly orderTargetField: HTMLSelectElement
@@ -209,6 +209,24 @@ const robotOptionMarkup = (
   selectedRobotId: string,
 ): string => optionMarkup(robot.id, `${robot.name} · ${robot.id}`, robot.id === selectedRobotId)
 
+const operatorButtonMarkup = (
+  robot: AppBootstrap['robots'][number],
+  selected: boolean,
+): string => `
+  <button
+    class="operator-button"
+    data-operator-robot="${escapeHtml(robot.id)}"
+    data-selected="${selected ? 'true' : 'false'}"
+    type="button"
+  >
+    <span class="operator-button__icon">${escapeHtml(robot.name[0] ?? '?')}</span>
+    <span class="operator-button__body">
+      <span class="operator-button__name">${escapeHtml(robot.name)}</span>
+      <span class="operator-button__meta">${escapeHtml(robot.id)} · ${robot.battery}% battery</span>
+    </span>
+  </button>
+`
+
 const contractOptionMarkup = (
   contract: AppBootstrap['shell']['contractOptions'][number],
 ): string => `
@@ -323,7 +341,12 @@ export const renderLayout = (
   const missionStage = bootstrap.shell.activeStage === 'mission'
   const selectedContract = findSelectedContract(bootstrap)
   const selectedConfig = findSelectedConfig(bootstrap)
+  const activeOperator = bootstrap.robots.find((robot) => robot.id === orderDraft.robotId) ?? bootstrap.robots[0]
   const followTargets = bootstrap.robots.filter((robot) => robot.id !== orderDraft.robotId)
+
+  if (activeOperator === undefined) {
+    throw new Error('The browser shell has no robots to command.')
+  }
 
   const headerMetrics = missionStage
     ? [
@@ -471,7 +494,7 @@ export const renderLayout = (
             steps: [
               [
                 'Pick an operator',
-                'Use the Robot dropdown or click a robot on the board to decide who you are commanding right now.',
+                'Use the operator strip above the board uplink to decide who you are commanding right now.',
               ],
               [
                 'Inspect the map',
@@ -479,7 +502,7 @@ export const renderLayout = (
               ],
               [
                 'Queue a command',
-                'Use board actions or High-level Orders to hold, move, follow, scan, hack, secure, extract, or return to relay.',
+                'Use board actions or the nearby High-level Orders panel to hold, move, follow, scan, hack, secure, extract, or return to relay.',
               ],
               [
                 'Advance the shell',
@@ -523,33 +546,116 @@ export const renderLayout = (
           <dl class="board-summary">
             ${boardStats.map(([label, value]) => headerMetricMarkup(label, value)).join('')}
           </dl>
-          ${
-            missionStage
-              ? `
-                <div class="board-inspector">
-                  <article class="selection-card selection-card--static" data-selected="true">
-                    <div class="selection-card__header">
-                      <div>
-                        <p class="eyebrow">${escapeHtml(boardInspector.eyebrow)}</p>
-                        <h3>${escapeHtml(boardInspector.title)}</h3>
+          <div class="board-control-grid"${missionStage ? '' : ' hidden'}>
+                  <div class="board-inspector">
+                    <div class="operator-strip">
+                      <p class="field__label">Operators</p>
+                      <div class="operator-strip__list">
+                        ${bootstrap.robots
+                          .map((robot) => operatorButtonMarkup(robot, robot.id === orderDraft.robotId))
+                          .join('')}
                       </div>
-                      <span class="selection-pill">${escapeHtml(boardInspector.badge)}</span>
                     </div>
-                    <p class="selection-card__summary">${escapeHtml(boardInspector.summary)}</p>
-                    <dl class="selection-card__stats">
-                      ${boardInspector.stats.map((stat) => boardInspectorStatMarkup(stat)).join('')}
-                    </dl>
-                  </article>
-                  <div class="board-inspector__actions">
-                    ${boardInspector.actions
-                      .map((action) => boardInspectorActionMarkup(action))
-                      .join('')}
+                    <article class="selection-card selection-card--static" data-selected="true">
+                      <div class="selection-card__header">
+                        <div>
+                          <p class="eyebrow">${escapeHtml(boardInspector.eyebrow)}</p>
+                          <h3>${escapeHtml(boardInspector.title)}</h3>
+                        </div>
+                        <span class="selection-pill">${escapeHtml(boardInspector.badge)}</span>
+                      </div>
+                      <p class="selection-card__summary">${escapeHtml(boardInspector.summary)}</p>
+                      <dl class="selection-card__stats">
+                        ${boardInspector.stats.map((stat) => boardInspectorStatMarkup(stat)).join('')}
+                      </dl>
+                    </article>
+                    <div class="board-inspector__actions">
+                      ${boardInspector.actions
+                        .map((action) => boardInspectorActionMarkup(action))
+                        .join('')}
+                    </div>
+                    <p class="board-inspector__hint">${escapeHtml(boardInspector.hint)}</p>
                   </div>
-                  <p class="board-inspector__hint">${escapeHtml(boardInspector.hint)}</p>
+
+                  <section class="board-queue">
+                    <div class="board-queue__header">
+                      <div>
+                        <p class="eyebrow">High-level orders</p>
+                        <h3>Queue robot action</h3>
+                      </div>
+                      <div class="order-operator">
+                        <span class="field__label">Active operator</span>
+                        <p class="order-operator__name">${escapeHtml(activeOperator.name)}</p>
+                        <p class="order-operator__meta">${escapeHtml(activeOperator.id)} · ${activeOperator.signal}</p>
+                      </div>
+                    </div>
+                    <form class="order-form order-form--board" data-order-form>
+                      <label class="field">
+                        <span class="field__label">Order</span>
+                        <select class="field__control" data-order-type>
+                          ${ORDER_OPTIONS.map((option) => orderOptionMarkup(option, orderDraft.orderType)).join('')}
+                        </select>
+                      </label>
+                      <div class="field" data-order-follow-field${orderTypeNeedsTargetRobot(orderDraft.orderType) ? '' : ' hidden'}>
+                        <label class="field__stack">
+                          <span class="field__label">Follow target</span>
+                          <select class="field__control" data-order-target>
+                            ${followTargets
+                              .map((robot) => robotOptionMarkup(robot, orderDraft.targetRobotId))
+                              .join('')}
+                          </select>
+                        </label>
+                      </div>
+                      <div class="order-form__grid" data-order-move-fields${orderTypeNeedsPosition(orderDraft.orderType) ? '' : ' hidden'}>
+                        <label class="field">
+                          <span class="field__label">Grid X</span>
+                          <input
+                            class="field__control"
+                            data-order-move-x
+                            inputmode="numeric"
+                            max="${bootstrap.board.width - 1}"
+                            min="0"
+                            type="number"
+                            value="${escapeHtml(orderDraft.moveX)}"
+                          />
+                        </label>
+                        <label class="field">
+                          <span class="field__label">Grid Y</span>
+                          <input
+                            class="field__control"
+                            data-order-move-y
+                            inputmode="numeric"
+                            max="${bootstrap.board.height - 1}"
+                            min="0"
+                            type="number"
+                            value="${escapeHtml(orderDraft.moveY)}"
+                          />
+                        </label>
+                      </div>
+                      <p class="order-form__hint" data-order-hint>
+                        ${escapeHtml(orderTypeDescription(orderDraft.orderType))}
+                      </p>
+                      <p class="packet-meta">
+                        Move orders use packet-grid coordinates (0-based x,y), and the target must be a
+                        real board tile. Empty gaps and blocked tiles are invalid, so clicking a tile on
+                        the tactical board is usually easier.
+                      </p>
+                      <div class="save-transfer__actions">
+                        <button
+                          class="action-button"
+                          data-submit-order
+                          type="submit"
+                          ${bootstrap.controls.canQueueOrders ? '' : 'disabled'}
+                        >
+                          Queue order for ${escapeHtml(activeOperator.name)}
+                        </button>
+                      </div>
+                    </form>
+                    <p class="action-status action-status--compact" data-order-status>
+                      Orders queued here use the active operator from the board uplink strip.
+                    </p>
+                  </section>
                 </div>
-              `
-              : ''
-          }
         </section>
 
         <aside class="sidebar">
@@ -713,90 +819,6 @@ export const renderLayout = (
               </div>
               <p class="action-status" data-action-status>
                 ${escapeHtml(bootstrap.controls.status)}
-              </p>
-            </section>
-
-            <section class="panel"${missionStage ? '' : ' hidden'}>
-              <div class="panel__header">
-                <div>
-                  <p class="eyebrow">High-level orders</p>
-                  <h2>Queue robot action</h2>
-                </div>
-              </div>
-              <form class="order-form" data-order-form>
-                <div class="order-form__grid">
-                  <label class="field">
-                    <span class="field__label">Robot</span>
-                    <select class="field__control" data-order-robot>
-                      ${bootstrap.robots
-                        .map((robot) => robotOptionMarkup(robot, orderDraft.robotId))
-                        .join('')}
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span class="field__label">Order</span>
-                    <select class="field__control" data-order-type>
-                      ${ORDER_OPTIONS.map((option) => orderOptionMarkup(option, orderDraft.orderType)).join('')}
-                    </select>
-                  </label>
-                </div>
-                <div class="field" data-order-follow-field${orderTypeNeedsTargetRobot(orderDraft.orderType) ? '' : ' hidden'}>
-                  <label class="field__stack">
-                    <span class="field__label">Follow target</span>
-                    <select class="field__control" data-order-target>
-                      ${followTargets
-                        .map((robot) => robotOptionMarkup(robot, orderDraft.targetRobotId))
-                        .join('')}
-                    </select>
-                  </label>
-                </div>
-                <div class="order-form__grid" data-order-move-fields${orderTypeNeedsPosition(orderDraft.orderType) ? '' : ' hidden'}>
-                  <label class="field">
-                    <span class="field__label">Grid X</span>
-                    <input
-                      class="field__control"
-                      data-order-move-x
-                      inputmode="numeric"
-                      max="${bootstrap.board.width - 1}"
-                      min="0"
-                      type="number"
-                      value="${escapeHtml(orderDraft.moveX)}"
-                    />
-                  </label>
-                  <label class="field">
-                    <span class="field__label">Grid Y</span>
-                    <input
-                      class="field__control"
-                      data-order-move-y
-                      inputmode="numeric"
-                      max="${bootstrap.board.height - 1}"
-                      min="0"
-                      type="number"
-                      value="${escapeHtml(orderDraft.moveY)}"
-                    />
-                  </label>
-                </div>
-                <p class="order-form__hint" data-order-hint>
-                  ${escapeHtml(orderTypeDescription(orderDraft.orderType))}
-                </p>
-                <p class="packet-meta">
-                  Move orders use packet-grid coordinates (0-based x,y), and the target must be a
-                  real board tile. Empty gaps and blocked tiles are invalid, so clicking a tile on
-                  the tactical board is usually easier.
-                </p>
-                <div class="save-transfer__actions">
-                  <button
-                    class="action-button"
-                    data-submit-order
-                    type="submit"
-                    ${bootstrap.controls.canQueueOrders ? '' : 'disabled'}
-                  >
-                    Queue selected order
-                  </button>
-                </div>
-              </form>
-              <p class="action-status" data-order-status>
-                Orders queued here are appended to the deterministic mission stack.
               </p>
             </section>
 
@@ -990,11 +1012,11 @@ export const renderLayout = (
   const orderMoveFields = container.querySelector<HTMLDivElement>('[data-order-move-fields]')
   const orderMoveXField = container.querySelector<HTMLInputElement>('[data-order-move-x]')
   const orderMoveYField = container.querySelector<HTMLInputElement>('[data-order-move-y]')
-  const orderRobotField = container.querySelector<HTMLSelectElement>('[data-order-robot]')
   const orderStatus = container.querySelector<HTMLParagraphElement>('[data-order-status]')
   const orderSubmitButton = container.querySelector<HTMLButtonElement>('[data-submit-order]')
   const orderTargetField = container.querySelector<HTMLSelectElement>('[data-order-target]')
   const orderTypeField = container.querySelector<HTMLSelectElement>('[data-order-type]')
+  const operatorButtons = container.querySelectorAll<HTMLButtonElement>('[data-operator-robot]')
   const packetStatus = container.querySelector<HTMLParagraphElement>('[data-packet-status]')
   const resetButton = container.querySelector<HTMLButtonElement>('[data-reset-shell]')
   const restoreAutosaveButton =
@@ -1020,11 +1042,11 @@ export const renderLayout = (
     orderMoveFields === null ||
     orderMoveXField === null ||
     orderMoveYField === null ||
-    orderRobotField === null ||
     orderStatus === null ||
     orderSubmitButton === null ||
     orderTargetField === null ||
     orderTypeField === null ||
+    operatorButtons.length === 0 ||
     packetStatus === null ||
     resetButton === null ||
     restoreAutosaveButton === null ||
@@ -1046,6 +1068,7 @@ export const renderLayout = (
     configButtons: container.querySelectorAll<HTMLButtonElement>('[data-select-config]'),
     contractButtons: container.querySelectorAll<HTMLButtonElement>('[data-select-contract]'),
     launchMissionButton,
+    operatorButtons,
     openConfigButton,
     orderFollowField,
     orderForm,
@@ -1053,7 +1076,6 @@ export const renderLayout = (
     orderMoveFields,
     orderMoveXField,
     orderMoveYField,
-    orderRobotField,
     orderStatus,
     orderSubmitButton,
     orderTargetField,

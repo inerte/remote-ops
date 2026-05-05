@@ -100,7 +100,7 @@ const activeOperator = (shell: AppBootstrap, draft: BrowserOrderDraft): RobotSum
 
 const boardHint = (shell: AppBootstrap): string =>
   shell.controls.canQueueOrders
-    ? 'Board actions queue the same deterministic orders as the uplink below.'
+    ? 'Board actions queue the same deterministic orders as the manual queue beside the uplink.'
     : shell.controls.status
 
 const findSelectedRobot = (
@@ -384,7 +384,7 @@ const defaultInspector = (
     actions: operatorActions(operator, shell.controls.canQueueOrders === false),
     badge: `Operator ${operator.id}`,
     eyebrow: 'Board uplink',
-    hint: 'Click a robot to target it directly, or click a tile to expose contextual board actions.',
+    hint: 'Use the operator strip to change drivers, or click a robot or tile to expose contextual board actions.',
     stats: [
       { label: 'Archetype', value: operator.archetype },
       { label: 'Signal', value: operator.signal },
